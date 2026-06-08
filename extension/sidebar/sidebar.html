@@ -76,7 +76,10 @@
       </div>
       <div class="section-body">
         <textarea id="chat-input" placeholder="Describe what you want this month...&#10;&#10;e.g. 3-4 day trips, no early shows, prefer SFO/LAX, need 18th-22nd off"></textarea>
-        <button class="btn-primary" id="btn-build">Build Bid</button>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-primary" id="btn-build" style="flex:1;">Build Bid</button>
+          <button class="btn-secondary" id="btn-clear-bid" style="width:auto;padding:6px 12px;">✕ Clear</button>
+        </div>
         <div id="chat-status" class="muted hidden"></div>
       </div>
     </div>

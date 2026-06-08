@@ -706,6 +706,14 @@ function bindEvents() {
 
   // Build bid
   document.getElementById('btn-build').addEventListener('click', buildBid);
+  document.getElementById('btn-clear-bid').addEventListener('click', () => {
+    bidModel = null;
+    document.getElementById('chat-input').value = '';
+    document.getElementById('bid-preview').innerHTML = '';
+    document.getElementById('chat-status').className = 'muted hidden';
+    document.getElementById('chat-status').textContent = '';
+    renderPairings(); // re-render without scoring
+  });
 
   // Submit bid
   document.getElementById('btn-submit').addEventListener('click', submitBid);

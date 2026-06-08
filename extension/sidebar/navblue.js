@@ -91,7 +91,14 @@ export class NavblueClient {
 
     bidSets = bidSets.replace(/^<BidSets[^>]*>/, tag => {
       if (!tag.includes('xmlns')) tag = tag.replace('<BidSets', '<BidSets xmlns="http://tempuri.org"');
-      return this._cleanBidSetsTag(tag);
+      tag = this._cleanBidSetsTag(tag);
+      // Tell NavBlue which bid section was modified
+      if (target === 'default') {
+        tag = tag.replace(/DefaultBidsModified="[^"]*"/, 'DefaultBidsModified="true"');
+      } else {
+        tag = tag.replace(/CurrentBidsModified="[^"]*"/, 'CurrentBidsModified="true"');
+      }
+      return tag;
     });
 
     const innerMatch = bidLinesXml.match(/<BidLines>([\s\S]*?)<\/BidLines>/);

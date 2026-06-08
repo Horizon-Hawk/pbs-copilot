@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "PBS Copilot",
+  "version": "0.1.0",
+  "description": "AI-powered PBS bid builder for NavBlue",
+
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "activeTab"
+  ],
+
+  "host_permissions": [
+    "*://*.pbs.vmc.navblue.cloud/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["*://*.pbs.vmc.navblue.cloud/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "side_panel": {
+    "default_path": "sidebar/sidebar.html"
+  },
+
+  "action": {
+    "default_title": "PBS Copilot",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

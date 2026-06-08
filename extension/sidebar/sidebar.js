@@ -184,36 +184,71 @@ async function loadPairings(period) {
 function showPairingsPrompt(listEl, countEl, period) {
   countEl.textContent = '!';
   listEl.innerHTML = `
-    <div class="status-info" style="font-size:12px;line-height:1.6;">
-      <strong>Pairings not captured yet</strong><br>
-      Click <em>Reload NavBlue tab</em>, wait for it to finish loading,
-      then navigate to the Pairings section. The sidebar will update automatically.
-    </div>
-    <div style="display:flex;gap:6px;margin-top:8px;">
+    <button id="btn-nav-pairings" class="btn-primary" style="width:100%;margin-bottom:6px;">▶ Load Pairings from NavBlue</button>
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
       <button id="btn-reload-navblue" class="btn-secondary" style="font-size:11px;flex:1;">↻ Reload NavBlue tab</button>
       <button id="btn-retry-pairings" class="btn-secondary" style="font-size:11px;flex:1;">🔄 Check again</button>
     </div>
-    <details style="margin-top:10px;">
-      <summary style="font-size:11px;color:#94a3b8;cursor:pointer;">Paste pairings XML manually (fallback)</summary>
-      <div style="font-size:10px;color:#94a3b8;margin:4px 0;">In NavBlue DevTools → Network → find ClassBidUI request → copy Response</div>
-      <textarea id="pairings-paste" placeholder="Paste NavBlue pairings XML here…"
+    <details>
+      <summary style="font-size:11px;color:#94a3b8;cursor:pointer;">Paste response manually (fallback)</summary>
+      <textarea id="pairings-paste" placeholder="Paste NavBlue pairings XML or JSON here…"
         style="width:100%;height:80px;margin-top:4px;font-size:10px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:4px;padding:4px;box-sizing:border-box;resize:vertical;"></textarea>
       <button id="btn-parse-paste" class="btn-secondary" style="font-size:11px;margin-top:4px;width:100%;">Load from paste</button>
     </details>`;
 
-  document.getElementById('btn-reload-navblue')?.addEventListener('click', async () => {
+  document.getElementById('btn-nav-pairings')?.addEventListener('click', async () => {
     const tabs = await chrome.tabs.query({ url: '*://*.pbs.vmc.navblue.cloud/*' });
     if (!tabs.length) {
-      listEl.querySelector('.status-info').textContent = 'NavBlue tab not found — open NavBlue first.';
+      listEl.innerHTML = '<div class="status-error" style="font-size:12px;">NavBlue tab not found — open NavBlue first.</div>';
       return;
     }
+    const tabId = tabs[0].id;
+    listEl.innerHTML = '<div class="status-loading" style="font-size:12px;">Navigating NavBlue to Pairings… sidebar will update automatically.</div>';
+    countEl.textContent = '…';
+    try {
+      const [{ result }] = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          // Try Angular $location route change first
+          try {
+            const inj = window.angular?.element(document.body)?.injector?.();
+            if (inj) {
+              const $loc = inj.get('$location');
+              const $rs  = inj.get('$rootScope');
+              const cur  = $loc.path() || '';
+              if (!cur.toLowerCase().includes('pairing')) {
+                for (const p of ['/pairings', '/bid/pairings', '/bidding/pairings', '/schedule/pairings', '/pairing']) {
+                  try { $loc.path(p); $rs.$apply(); return { method: 'angular', path: p }; } catch(e) {}
+                }
+              }
+              return { method: 'angular-already', path: cur };
+            }
+          } catch(e) {}
+          // Fallback: find and click a nav link that mentions Pairings
+          const els = [
+            ...document.querySelectorAll('[ui-sref*="pairing"],[href*="pairing"],[ng-click*="pairing"]'),
+            ...[...document.querySelectorAll('a,li,button,.nav-item,[role="menuitem"]')]
+              .filter(el => /\bpairings?\b/i.test(el.textContent.trim()))
+          ];
+          if (els.length) { els[0].click(); return { method: 'click', text: els[0].textContent.trim().slice(0,40) }; }
+          return { method: 'none' };
+        }
+      });
+      if (result?.method === 'none') {
+        listEl.innerHTML = '<div class="status-info" style="font-size:12px;">Could not auto-navigate — switch to the NavBlue tab and click Pairings, then the sidebar updates automatically.</div>';
+      }
+      console.log('[PBS] Nav-to-pairings result:', result);
+    } catch(e) {
+      listEl.innerHTML = `<div class="status-error" style="font-size:12px;">Script injection failed: ${escHtml(e.message)}</div>`;
+    }
+  });
+
+  document.getElementById('btn-reload-navblue')?.addEventListener('click', async () => {
+    const tabs = await chrome.tabs.query({ url: '*://*.pbs.vmc.navblue.cloud/*' });
+    if (!tabs.length) { listEl.innerHTML = '<div class="status-error" style="font-size:12px;">NavBlue tab not found.</div>'; return; }
     chrome.tabs.reload(tabs[0].id);
     countEl.textContent = '…';
-    listEl.innerHTML = `<div class="status-loading" style="font-size:12px;line-height:1.6;">
-      Reloading NavBlue tab…<br>
-      After it finishes loading, open the <strong>Pairings</strong> section.<br>
-      The list will populate automatically — no need to click anything here.
-    </div>`;
+    listEl.innerHTML = '<div class="status-loading" style="font-size:12px;">Reloading NavBlue… then click ▶ Load Pairings.</div>';
   });
 
   document.getElementById('btn-retry-pairings')?.addEventListener('click', async () => {

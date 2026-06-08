@@ -170,28 +170,67 @@ async function loadPairings(period) {
       countEl.textContent = rawPairings.length;
       if (rawPairings.length) { renderPairings(); return; }
     }
-    // Pairings not cached yet — guide user to trigger the interceptor
-    const info = res?.scopeKeys ? JSON.stringify(res.scopeKeys, null, 2) : (res?.error || 'unknown');
-    console.warn('[PBS] Angular extraction result:', info);
-    countEl.textContent = '!';
-    listEl.innerHTML = `<div class="status-info" style="font-size:12px;line-height:1.5;">
-      <strong>Open the Pairings tab in NavBlue</strong><br>
-      Pairings will load automatically once NavBlue fetches them.<br>
-      Then click Retry below.
-      <br><br>
-      <button id="btn-retry-pairings" class="btn-secondary" style="font-size:11px;">🔄 Retry</button>
-    </div>`;
+    console.warn('[PBS] No pairings cached yet — showing reload prompt');
+    showPairingsPrompt(listEl, countEl, period);
   } catch (e) {
-    countEl.textContent = '!';
-    listEl.innerHTML = `<div class="status-info" style="font-size:12px;line-height:1.5;">
-      <strong>Open the Pairings tab in NavBlue</strong><br>
-      Pairings will load automatically once NavBlue fetches them.<br>
-      Then click Retry below.
-      <br><br>
-      <button id="btn-retry-pairings" class="btn-secondary" style="font-size:11px;">🔄 Retry</button>
-    </div>`;
+    console.warn('[PBS] loadPairings catch:', e.message);
+    showPairingsPrompt(listEl, countEl, period);
   }
+}
+
+function showPairingsPrompt(listEl, countEl, period) {
+  countEl.textContent = '!';
+  listEl.innerHTML = `
+    <div class="status-info" style="font-size:12px;line-height:1.8;">
+      <strong>Pairings not captured yet</strong><br>
+      <strong>Step 1:</strong> Click "Reload NavBlue tab" below<br>
+      <strong>Step 2:</strong> Wait for NavBlue to finish loading<br>
+      <strong>Step 3:</strong> Navigate to the Pairings section in NavBlue<br>
+      <strong>Step 4:</strong> Click Retry here
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button id="btn-reload-navblue" class="btn-secondary" style="font-size:11px;flex:1;">↻ Reload NavBlue tab</button>
+      <button id="btn-retry-pairings" class="btn-secondary" style="font-size:11px;flex:1;">🔄 Retry</button>
+    </div>
+    <div style="margin-top:10px;">
+      <details>
+        <summary style="font-size:11px;color:#94a3b8;cursor:pointer;">Paste pairings XML manually</summary>
+        <textarea id="pairings-paste" placeholder="Paste NavBlue pairings XML here…"
+          style="width:100%;height:80px;margin-top:4px;font-size:10px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:4px;padding:4px;box-sizing:border-box;resize:vertical;"></textarea>
+        <button id="btn-parse-paste" class="btn-secondary" style="font-size:11px;margin-top:4px;width:100%;">Load from paste</button>
+      </details>
+    </div>`;
+
+  document.getElementById('btn-reload-navblue')?.addEventListener('click', async () => {
+    const tabs = await chrome.tabs.query({ url: '*://*.pbs.vmc.navblue.cloud/*' });
+    if (tabs.length) {
+      chrome.tabs.reload(tabs[0].id);
+      listEl.innerHTML = '<div class="status-loading" style="font-size:12px;">Reloading NavBlue… navigate to Pairings after it loads, then click Retry.</div>';
+      countEl.textContent = '…';
+    } else {
+      listEl.innerHTML = '<div class="status-error" style="font-size:12px;">NavBlue tab not found — open NavBlue first.</div>';
+    }
+  });
+
   document.getElementById('btn-retry-pairings')?.addEventListener('click', () => loadPairings(period));
+
+  document.getElementById('btn-parse-paste')?.addEventListener('click', () => {
+    const xml = document.getElementById('pairings-paste')?.value?.trim();
+    if (!xml) return;
+    try {
+      const parsed = parsePairingsXml(xml);
+      if (parsed.length) {
+        rawPairings = parsed;
+        countEl.textContent = rawPairings.length;
+        renderPairings();
+        chrome.storage.local.set({ cachedPairingsXml: xml });
+      } else {
+        alert('No <Pairing> elements found in pasted XML.');
+      }
+    } catch (e) {
+      alert('Parse error: ' + e.message);
+    }
+  });
 }
 
 function escHtml(s) {

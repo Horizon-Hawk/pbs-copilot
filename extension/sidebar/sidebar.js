@@ -121,9 +121,11 @@ async function loadPairings(period) {
 
   // First try: interceptor cache (populated when user navigates to pairings in NavBlue)
   try {
-    const cached = await chrome.storage.local.get('cachedPairingsXml');
+    const cached = await chrome.storage.local.get(['cachedPairingsXml', 'cachedPairingsFormat']);
     if (cached.cachedPairingsXml) {
-      const parsed = parsePairingsXml(cached.cachedPairingsXml);
+      const parsed = cached.cachedPairingsFormat === 'json'
+        ? parsePairingsJson(cached.cachedPairingsXml)
+        : parsePairingsXml(cached.cachedPairingsXml);
       if (parsed.length) {
         rawPairings = parsed;
         countEl.textContent = rawPairings.length;
@@ -684,16 +686,17 @@ function bindEvents() {
   // Messages from background (session data) — only re-init if token changed
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'NAVBLUE_PAIRINGS_CAPTURED') {
-      console.log('[PBS] Pairings captured by interceptor from', message.url, 'size:', message.data?.length);
+      console.log('[PBS] Pairings captured by interceptor from', message.url, 'format:', message.format, 'size:', message.data?.length);
       try {
-        const parsed = parsePairingsXml(message.data);
+        const parsed = message.format === 'json'
+          ? parsePairingsJson(message.data)
+          : parsePairingsXml(message.data);
         if (parsed.length) {
           rawPairings = parsed;
           document.getElementById('pairings-count').textContent = rawPairings.length;
           renderPairings();
-          // Cache so loadPairings() can use it on next sidebar open (fire-and-forget)
-          chrome.storage.local.set({ cachedPairingsXml: message.data, cachedPairingsUrl: message.url });
-          console.log('[PBS] Loaded', rawPairings.length, 'pairings from interceptor, cached to storage');
+          chrome.storage.local.set({ cachedPairingsXml: message.data, cachedPairingsFormat: message.format, cachedPairingsUrl: message.url });
+          console.log('[PBS] Loaded', rawPairings.length, 'pairings from interceptor');
         }
       } catch (e) {
         console.warn('[PBS] Failed to parse intercepted pairings:', e.message);
@@ -730,6 +733,27 @@ function parsePairingsXml(xml) {
     layovers: p.getAttribute('LayoverLocationNames')?.split(',').filter(Boolean) || [],
     dates: p.getAttribute('Dates'),
     detail: p.getAttribute('DetailReport') || ''
+  }));
+}
+
+function parsePairingsJson(jsonText) {
+  let data = JSON.parse(jsonText);
+  // Unwrap common envelope shapes: { pairings: [...] }, { data: [...] }, { Pairings: [...] }
+  if (!Array.isArray(data)) {
+    data = data.pairings || data.Pairings || data.data || data.Data || data.items || data.Items || [];
+  }
+  const g = (o, ...keys) => { for (const k of keys) { if (o[k] != null) return String(o[k]); } return ''; };
+  return data.filter(p => g(p,'Number','PairingNumber','number','pairingNumber')).map(p => ({
+    number:   g(p, 'Number', 'PairingNumber', 'number', 'pairingNumber'),
+    length:   g(p, 'Length', 'Days', 'length', 'days'),
+    checkin:  g(p, 'CheckIn', 'checkIn', 'checkin', 'CheckInTime', 'checkInTime'),
+    checkout: g(p, 'CheckOut', 'checkOut', 'checkout', 'CheckOutTime', 'checkOutTime'),
+    credit:   g(p, 'Credit', 'CreditTime', 'credit', 'creditTime'),
+    tafb:     g(p, 'Tafb', 'TAFB', 'tafb', 'TimeAwayFromBase', 'timeAwayFromBase'),
+    layovers: (g(p, 'LayoverLocationNames', 'layoverLocationNames', 'Layovers', 'layovers') || '')
+                .split(',').filter(Boolean),
+    dates:    g(p, 'Dates', 'dates', 'FlyDates', 'flyDates'),
+    detail:   g(p, 'DetailReport', 'detailReport', 'detail', '')
   }));
 }
 

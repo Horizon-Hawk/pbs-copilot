@@ -4,14 +4,21 @@
   window.__pbsInterceptorActive = true;
 
   function relay(url, text) {
-    if (!text || text.length < 100) return;
-    // Log all non-HTML data calls so we can see what's happening
-    if (!url.endsWith('.html') && !url.endsWith('.js') && !url.endsWith('.css') && !url.endsWith('.png')) {
+    if (!text || text.length < 50) return;
+    const isStatic = /\.(html|js|css|png|woff2?|svg|ico)(\?|$)/.test(url);
+    if (!isStatic) {
       window.postMessage({ type: '__PBS_DATA_CALL__', url: url.slice(0, 300), size: text.length, preview: text.slice(0, 120) }, '*');
     }
-    // Grab anything with pairing data
-    if (text.includes('<Pairing') || text.includes('"Pairing"') || text.includes('"pairing"')) {
-      window.postMessage({ type: '__PBS_PAIRINGS__', url, data: text }, '*');
+    // XML pairings
+    if (text.includes('<Pairing')) {
+      window.postMessage({ type: '__PBS_PAIRINGS__', url, data: text, format: 'xml' }, '*');
+      return;
+    }
+    // JSON pairings — look for array with pairing-like keys
+    if ((text.startsWith('[') || text.startsWith('{')) &&
+        (text.includes('"Number"') || text.includes('"PairingNumber"') || text.includes('"number"')) &&
+        (text.includes('"CheckIn"') || text.includes('"checkIn"') || text.includes('"Credit"') || text.includes('"credit"'))) {
+      window.postMessage({ type: '__PBS_PAIRINGS__', url, data: text, format: 'json' }, '*');
     }
   }
 
@@ -35,7 +42,17 @@
   XMLHttpRequest.prototype.send = function () {
     const xhr = this;
     xhr.addEventListener('load', function () {
-      relay(xhr._pbsUrl || '', xhr.responseText);
+      let text = '';
+      try {
+        if (!xhr.responseType || xhr.responseType === 'text') {
+          text = xhr.responseText;
+        } else if (xhr.responseType === 'json') {
+          text = JSON.stringify(xhr.response);
+        } else {
+          return; // arraybuffer/blob/document — skip
+        }
+      } catch (e) { return; }
+      relay(xhr._pbsUrl || '', text);
     });
     return _send.apply(this, arguments);
   };

@@ -270,11 +270,13 @@ function showPairingsPrompt(listEl, countEl, period) {
         renderPairings();
         chrome.storage.local.set({ cachedPairingsXml: text, cachedPairingsFormat: isJson ? 'json' : 'xml' });
       } else {
-        // Show what keys ARE present to help diagnose
-        const sample = isJson
-          ? (() => { try { const d = JSON.parse(text); const arr = Array.isArray(d) ? d : (d.arrPairings || d.pairings || d.data || []); return JSON.stringify(Object.keys(arr[0] || {})); } catch(e) { return e.message; } })()
-          : 'check console for <Pairing> attributes';
-        alert(`Parsed 0 usable pairings.\nSample keys found: ${sample}\nCheck the browser console for more detail.`);
+        let sample;
+        if (isJson) {
+          try { const d = JSON.parse(text); const arr = Array.isArray(d) ? d : (d.arrPairings || d.pairings || d.data || []); sample = JSON.stringify(Object.keys(arr[0] || {})); } catch(e) { sample = e.message; }
+        } else {
+          sample = window.__pbsLastPairingAttrs ? JSON.stringify(Object.keys(window.__pbsLastPairingAttrs)) : 'no <Pairing> elements found';
+        }
+        alert(`Parsed 0 usable pairings — number attribute not found.\n\nActual keys in data:\n${sample}\n\nShare this with the developer to fix the field mapping.`);
       }
     } catch (e) {
       alert('Parse error: ' + e.message);
@@ -767,22 +769,27 @@ function parsePairingsXml(xml) {
   const doc = parser.parseFromString(xml, 'text/xml');
   const nodes = [...doc.querySelectorAll('Pairing')];
   if (nodes.length > 0) {
-    // Log actual attribute names from the first element so we can verify the mapping
     const attrs = {};
     for (const a of nodes[0].attributes) attrs[a.name] = a.value;
     console.log('[PBS] parsePairingsXml first <Pairing> attributes:', JSON.stringify(attrs));
+    window.__pbsLastPairingAttrs = attrs; // expose for paste-box diagnostics
   }
-  return nodes.map(p => ({
-    number: p.getAttribute('Number'),
-    length: p.getAttribute('Length'),
-    checkin: p.getAttribute('CheckIn'),
-    checkout: p.getAttribute('CheckOut'),
-    credit: p.getAttribute('Credit'),
-    tafb: p.getAttribute('Tafb'),
-    layovers: p.getAttribute('LayoverLocationNames')?.split(',').filter(Boolean) || [],
-    dates: p.getAttribute('Dates'),
-    detail: p.getAttribute('DetailReport') || ''
-  }));
+  return nodes.map(p => {
+    // Try both known attribute name variants
+    const num = p.getAttribute('Number') || p.getAttribute('PairingNumber') ||
+                p.getAttribute('OriginalNumber') || p.getAttribute('strPairingNumber') || null;
+    return {
+      number:   num,
+      length:   p.getAttribute('Length') || p.getAttribute('Days') || null,
+      checkin:  p.getAttribute('CheckIn') || p.getAttribute('CheckinTime') || p.getAttribute('CheckInTime') || null,
+      checkout: p.getAttribute('CheckOut') || p.getAttribute('CheckoutTime') || p.getAttribute('CheckOutTime') || null,
+      credit:   p.getAttribute('Credit') || null,
+      tafb:     p.getAttribute('Tafb') || p.getAttribute('TAFB') || p.getAttribute('TimeAwayFromBase') || null,
+      layovers: (p.getAttribute('LayoverLocationNames') || p.getAttribute('Layovers') || '').split(',').filter(Boolean),
+      dates:    p.getAttribute('Dates') || p.getAttribute('PairingDates') || null,
+      detail:   p.getAttribute('DetailReport') || ''
+    };
+  }).filter(p => p.number); // drop items where no number attribute matched
 }
 
 function parsePairingsJson(jsonText) {

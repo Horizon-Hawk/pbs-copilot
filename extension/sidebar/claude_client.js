@@ -205,9 +205,12 @@ export async function buildBidFromPreferences({ preferences, pairings, absences,
     : '';
 
   const remainingCredit = Math.max(0, minCredit - preAwardCredit);
-  const creditContext = selectCreditTargetPairings(pairings || [], remainingCredit);
 
-  const creditMathContext = preAwardCredit > 0 || creditContext
+  // Only cherry-pick for credit when the request is explicitly about credit/hours targeting
+  const isCreditRequest = preAwardCredit > 0 || /\b(min(imum)?\s*credit|fewest\s*trip|least\s*trip|hit\s*min|target.*credit|credit.*target|\b75\s*h|\bhours?\s*target)\b/i.test(preferences);
+  const creditContext = isCreditRequest ? selectCreditTargetPairings(pairings || [], remainingCredit) : null;
+
+  const creditMathContext = isCreditRequest
     ? `\n\nCredit math:\n` +
       `  Pre-award credit this period: ${preAwardCredit}h\n` +
       `  Minimum credit target: ${minCredit}h\n` +

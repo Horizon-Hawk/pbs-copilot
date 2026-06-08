@@ -641,8 +641,8 @@ function bindEvents() {
           rawPairings = parsed;
           document.getElementById('pairings-count').textContent = rawPairings.length;
           renderPairings();
-          // Cache so loadPairings() can use it on next sidebar open
-          await chrome.storage.local.set({ cachedPairingsXml: message.data, cachedPairingsUrl: message.url });
+          // Cache so loadPairings() can use it on next sidebar open (fire-and-forget)
+          chrome.storage.local.set({ cachedPairingsXml: message.data, cachedPairingsUrl: message.url });
           console.log('[PBS] Loaded', rawPairings.length, 'pairings from interceptor, cached to storage');
         }
       } catch (e) {

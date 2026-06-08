@@ -11,7 +11,9 @@
   ],
 
   "host_permissions": [
-    "*://*.pbs.vmc.navblue.cloud/*"
+    "*://*.pbs.vmc.navblue.cloud/*",
+    "https://api.anthropic.com/*",
+    "https://*.vercel.app/*"
   ],
 
   "background": {

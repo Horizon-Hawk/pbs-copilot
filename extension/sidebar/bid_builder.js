@@ -13,8 +13,7 @@
 //   name: string,
 //   avoid_pairings: [{ type, ...params }],
 //   award_pairings: [{ type, ...params }],   // ordered by preference
-//   specific_pairings: ["G3027", "G3043"],   // cherry-picked numbers
-//   else_start_next: bool
+//   specific_pairings: ["G3027", "G3043"]    // cherry-picked numbers
 // }]
 //
 // reserve: {
@@ -25,85 +24,137 @@ export function buildBidXml(model) {
   const lines = [];
   let lineNum = 1;
 
-  const line = (type, innerXml) => {
+  // AvoidPairings / AwardPairings: content element comes BEFORE BidLineNumber/BidLineType
+  const lineContentFirst = (type, innerXml, sysGen = false) => {
+    const num = lineNum++;
+    const tail = sysGen ? '<SysGen></SysGen>' : '<Editable></Editable>';
+    return `    <BidLine>
+      ${innerXml.trim()}
+      <BidLineNumber>${num}</BidLineNumber>
+      <BidLineType>${type}</BidLineType>
+      ${tail}
+    </BidLine>`;
+  };
+
+  // StartBidGroup / PreferOff / LineCondition / Else:
+  // Order: BidLineNumber, BidLineType, Editable, ShowAnalyzeDetails (optional), then content
+  const lineNumberFirst = (type, innerXml, extra = '') => {
     const num = lineNum++;
     return `    <BidLine>
       <BidLineNumber>${num}</BidLineNumber>
       <BidLineType>${type}</BidLineType>
-      ${innerXml}
+      <Editable></Editable>
+      ${extra ? extra + '\n      ' : ''}${innerXml.trim()}
+    </BidLine>`;
+  };
+
+  // SysGen StartBidGroup: Number, Type, ShowAnalyzeDetails, content, SysGen (no Editable)
+  const lineNumberFirstSysGen = (groupType, startTagInner) => {
+    const num = lineNum++;
+    return `    <BidLine>
+      <BidLineNumber>${num}</BidLineNumber>
+      <BidLineType>StartBidGroup</BidLineType>
+      <ShowAnalyzeDetails>false</ShowAnalyzeDetails>
+      <StartBidGroup>
+        <BidGroupType>${groupType}</BidGroupType>
+        ${startTagInner}
+      </StartBidGroup>
+      <SysGen></SysGen>
     </BidLine>`;
   };
 
   for (const group of model.bid_groups) {
-    // Start bid group
-    lines.push(line('StartBidGroup', `
-      <StartBidGroup>
+    lines.push(lineNumberFirst('StartBidGroup',
+      `<StartBidGroup>
         <BidGroupType>StartPairings</BidGroupType>
         <StartPairings></StartPairings>
-      </StartBidGroup>`));
+      </StartBidGroup>`,
+      '<ShowAnalyzeDetails>false</ShowAnalyzeDetails>'
+    ));
 
-    // Inject constants: avoid employees
+    // Constants: avoid employees
     for (const empId of (model.constants?.avoid_employees || [])) {
-      lines.push(line('AvoidPairings', buildAvoidEmployee(empId)));
+      lines.push(lineContentFirst('AvoidPairings', buildAvoidEmployee(empId)));
     }
 
-    // Inject constants: avoid pairings
+    // Constants: avoid pairings (PairingCheckin, LandingsIn, etc.)
     for (const rule of (model.constants?.avoid_pairings || [])) {
-      lines.push(line('AvoidPairings', buildPairingProperty('AvoidPairings', rule)));
+      const xml = buildPairingProperty('AvoidPairings', rule);
+      if (xml) lines.push(lineContentFirst('AvoidPairings', xml));
     }
 
-    // Inject constants: prefer off
+    // Constants: prefer off
     for (const pref of (model.constants?.prefer_off || [])) {
-      lines.push(line('PreferOff', buildPreferOff(pref)));
+      const xml = buildPreferOff(pref);
+      if (xml) lines.push(lineNumberFirst('PreferOff', xml));
     }
 
-    // Inject constants: line conditions
+    // Constants: line conditions — skip MaximumDaysOn (unconfirmed structure)
     for (const cond of (model.constants?.line_conditions || [])) {
-      lines.push(line('LineCondition', buildLineCondition(cond)));
+      if (cond.type === 'MaximumDaysOn') continue;
+      const xml = buildLineCondition(cond);
+      if (xml) lines.push(lineNumberFirst('LineCondition', xml));
     }
 
     // Group-specific avoid pairings
     for (const rule of (group.avoid_pairings || [])) {
-      lines.push(line('AvoidPairings', buildPairingProperty('AvoidPairings', rule)));
+      const xml = buildPairingProperty('AvoidPairings', rule);
+      if (xml) lines.push(lineContentFirst('AvoidPairings', xml));
     }
 
-    // Cherry-picked specific pairings (award if pairing numbers match)
+    // Cherry-picked specific pairings
     if (group.specific_pairings?.length) {
-      lines.push(line('AwardPairings', buildSpecificPairings(group.specific_pairings)));
+      lines.push(lineContentFirst('AwardPairings', buildSpecificPairings(group.specific_pairings)));
     }
 
     // Preference-based award pairings
     for (const rule of (group.award_pairings || [])) {
-      lines.push(line('AwardPairings', buildPairingProperty('AwardPairings', rule)));
+      const xml = buildPairingProperty('AwardPairings', rule);
+      if (xml) lines.push(lineContentFirst('AwardPairings', xml));
     }
 
-    // Catch-all award
-    lines.push(line('AwardPairings', `
-      <AwardPairings>
+    // Catch-all SysGen award — required at end of every group
+    lines.push(lineContentFirst('AwardPairings',
+      `<AwardPairings>
         <PairingProperties>
           <PairingProperty>
             <Award></Award>
             <PairingPropertyType>Award</PairingPropertyType>
           </PairingProperty>
         </PairingProperties>
-      </AwardPairings>`));
-
-    // Else start next (if not the terminal group)
-    if (group.else_start_next) {
-      lines.push(line('ElseStartNextBidGroup', '<ElseStartNextBidGroup></ElseStartNextBidGroup>'));
-    }
+      </AwardPairings>`,
+      true
+    ));
   }
 
   // Reserve group
-  lines.push(line('StartBidGroup', `
-    <StartBidGroup>
+  lines.push(lineNumberFirst('StartBidGroup',
+    `<StartBidGroup>
       <BidGroupType>StartReserve</BidGroupType>
       <StartReserve></StartReserve>
-    </StartBidGroup>`));
+    </StartBidGroup>`,
+    '<ShowAnalyzeDetails>false</ShowAnalyzeDetails>'
+  ));
 
   for (const pref of (model.reserve?.prefer_off || [])) {
-    lines.push(line('PreferOff', buildPreferOff(pref)));
+    const xml = buildPreferOff(pref);
+    if (xml) lines.push(lineNumberFirst('PreferOff', xml));
   }
+
+  // SysGen fallback groups — required by NavBlue at end of every bid
+  lines.push(lineNumberFirstSysGen('StartPairings', '<StartPairings></StartPairings>'));
+  lines.push(lineContentFirst('AwardPairings',
+    `<AwardPairings>
+        <PairingProperties>
+          <PairingProperty>
+            <Award></Award>
+            <PairingPropertyType>Award</PairingPropertyType>
+          </PairingProperty>
+        </PairingProperties>
+      </AwardPairings>`,
+    true  // sysGen
+  ));
+  lines.push(lineNumberFirstSysGen('StartReserve', '<StartReserve></StartReserve>'));
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <BidLines>
@@ -112,31 +163,30 @@ ${lines.join('\n')}
 }
 
 function buildAvoidEmployee(empId) {
-  return `
-    <AvoidPairings>
+  return `<AvoidPairings>
       <PairingProperties>
         <PairingProperty>
-          <PairingPropertyType>LegWithEmployeeNumber</PairingPropertyType>
           <LegWithEmployeeNumber>
             <EmployeeNumbers>
               <EmployeeNumber>${empId}</EmployeeNumber>
             </EmployeeNumbers>
           </LegWithEmployeeNumber>
+          <PairingPropertyType>LegWithEmployeeNumber</PairingPropertyType>
         </PairingProperty>
       </PairingProperties>
     </AvoidPairings>`;
 }
 
 function buildSpecificPairings(numbers) {
-  const numXml = numbers.map(n => `<PairingNumber>${n}</PairingNumber>`).join('\n              ');
-  return `
-    <AwardPairings>
+  const numXml = numbers.map(n => `<PairingNumber>${n}</PairingNumber>`).join('');
+  return `<AwardPairings>
       <PairingProperties>
         <PairingProperty>
-          <PairingPropertyType>PairingNumbers</PairingPropertyType>
-          <PairingNumbers>
-            <Numbers>${numXml}</Numbers>
-          </PairingNumbers>
+          <Pairing>
+            <PairingNumberType>PairingNumbers</PairingNumberType>
+            <PairingNumbers>${numXml}</PairingNumbers>
+          </Pairing>
+          <PairingPropertyType>Pairing</PairingPropertyType>
         </PairingProperty>
       </PairingProperties>
     </AwardPairings>`;
@@ -144,16 +194,14 @@ function buildSpecificPairings(numbers) {
 
 function buildPreferOff(pref) {
   if (pref === 'Weekends') {
-    return `
-    <PreferOff>
+    return `<PreferOff>
       <PreferOffType>PreferOffWeekends</PreferOffType>
       <PreferOffWeekends><Weekends></Weekends></PreferOffWeekends>
     </PreferOff>`;
   }
   if (pref.dates) {
     const datesXml = pref.dates.map(d => `<Date>${d}</Date>`).join('');
-    return `
-    <PreferOff>
+    return `<PreferOff>
       <PreferOffType>PreferOffDates</PreferOffType>
       <PreferOffDates><Dates>${datesXml}</Dates></PreferOffDates>
     </PreferOff>`;
@@ -165,8 +213,7 @@ function buildLineCondition(cond) {
   switch (cond.type) {
     case 'TimeBetweenPairings': {
       const h = String(Math.floor(cond.hours)).padStart(3, '0');
-      return `
-    <LineCondition>
+      return `<LineCondition>
       <LineConditionType>TimeBetweenPairings</LineConditionType>
       <TimeBetweenPairings>
         <Time><Hour>${h}</Hour><Minute>00</Minute></Time>
@@ -174,20 +221,17 @@ function buildLineCondition(cond) {
     </LineCondition>`;
     }
     case 'MaximumDaysOn':
-      return `
-    <LineCondition>
+      return `<LineCondition>
       <LineConditionType>MaximumDaysOn</LineConditionType>
       <MaximumDaysOn><Days>${cond.days}</Days></MaximumDaysOn>
     </LineCondition>`;
     case 'MinimumConsecutiveDaysOff':
-      return `
-    <LineCondition>
+      return `<LineCondition>
       <LineConditionType>MinimumConsecutiveDaysOff</LineConditionType>
       <MinimumConsecutiveDaysOff><Days>${cond.days}</Days></MinimumConsecutiveDaysOff>
     </LineCondition>`;
     case 'TotalDaysOffInPeriod':
-      return `
-    <LineCondition>
+      return `<LineCondition>
       <LineConditionType>TotalDaysOffInPeriod</LineConditionType>
       <TotalDaysOffInPeriod><Days>${cond.days}</Days></TotalDaysOffInPeriod>
     </LineCondition>`;
@@ -196,66 +240,77 @@ function buildLineCondition(cond) {
   }
 }
 
+// PairingPropertyType is always LAST inside PairingProperty
 function buildPairingProperty(wrapperType, rule) {
-  const inner = buildPairingPropertyInner(rule);
-  if (!inner) return '';
-  return `
-    <${wrapperType}>
+  const result = buildPairingPropertyContent(rule);
+  if (!result) return '';
+  const { content, type } = result;
+  return `<${wrapperType}>
       <PairingProperties>
         <PairingProperty>
-          ${inner}
+          ${content.trim()}
+          <PairingPropertyType>${type}</PairingPropertyType>
         </PairingProperty>
       </PairingProperties>
     </${wrapperType}>`;
 }
 
-function buildPairingPropertyInner(rule) {
+function buildPairingPropertyContent(rule) {
   switch (rule.type) {
     case 'PairingCheckin': {
       const [h, m] = rule.time.split(':');
-      return `
-          <PairingPropertyType>PairingCheckin</PairingPropertyType>
-          <PairingCheckin>
-            <TimeType>TimeCondition</TimeType>
+      return {
+        content: `<PairingCheckin>
             <TimeCondition>
               <Operator>${rule.operator || 'LT'}</Operator>
-              <Time><Hour>${h.padStart(2,'0')}</Hour><Minute>${m || '00'}</Minute></Time>
+              <Time><Hour>${h.padStart(2, '0')}</Hour><Minute>${m || '00'}</Minute></Time>
             </TimeCondition>
-          </PairingCheckin>`;
+            <TimeType>TimeCondition</TimeType>
+          </PairingCheckin>`,
+        type: 'PairingCheckin'
+      };
     }
     case 'LayoverStations': {
+      // AnyEvery lives at PairingProperty level, not inside LandingsIn
       const stXml = rule.stations.map(s => `<Station>${s}</Station>`).join('');
-      return `
-          <PairingPropertyType>LandingsIn</PairingPropertyType>
+      return {
+        content: `<AnyEvery>${rule.match || 'Any'}</AnyEvery>
           <LandingsIn>
-            <AnyEvery>${rule.match || 'Any'}</AnyEvery>
             <Stations>${stXml}</Stations>
             <StringListWithOptionsType>Stations</StringListWithOptionsType>
-          </LandingsIn>`;
+          </LandingsIn>`,
+        type: 'LandingsIn'
+      };
     }
-    case 'PairingLength': {
-      return `
-          <PairingPropertyType>PairingLength</PairingPropertyType>
-          <PairingLength>
-            <Length>${rule.days}</Length>
-          </PairingLength>`;
-    }
+    case 'PairingLength':
+      return {
+        content: `<PairingLength>
+            <NumberDaysCondition>
+              <Operator>${rule.operator || 'EQ'}</Operator>
+              <Value>${rule.days}</Value>
+            </NumberDaysCondition>
+            <NumberDaysType>NumberDaysCondition</NumberDaysType>
+          </PairingLength>`,
+        type: 'PairingLength'
+      };
     case 'TimeAwayFromBase': {
       const [h, m] = (rule.time || '0:00').split(':');
-      return `
-          <PairingPropertyType>TimeAwayFromBase</PairingPropertyType>
-          <TimeAwayFromBase>
+      return {
+        content: `<TimeAwayFromBase>
             <TimeCondition>
               <Operator>${rule.operator || 'GT'}</Operator>
-              <Time><Hour>${String(h).padStart(3,'0')}</Hour><Minute>${m || '00'}</Minute></Time>
+              <Time><Hour>${String(h)}</Hour><Minute>${m || '00'}</Minute></Time>
             </TimeCondition>
-          </TimeAwayFromBase>`;
+          </TimeAwayFromBase>`,
+        type: 'TimeAwayFromBase'
+      };
     }
     case 'DutyIsRedeye':
-      return `
-          <PairingPropertyType>DutyIsRedeye</PairingPropertyType>
-          <DutyIsRedeye></DutyIsRedeye>`;
+      return {
+        content: `<DutyIsRedeye></DutyIsRedeye>`,
+        type: 'DutyIsRedeye'
+      };
     default:
-      return '';
+      return null;
   }
 }

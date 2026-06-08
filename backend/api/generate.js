@@ -1,9 +1,5 @@
-// POST /api/generate — admin: create a new single-use token
-// Body: { admin_key: "...", note: "optional" }
-// Returns: { token: "COPILOT-XXXX-XXXX" }
-
-import { createClient } from '@supabase/supabase-js';
-import { randomBytes } from 'crypto';
+const { createClient } = require('@supabase/supabase-js');
+const { randomBytes } = require('crypto');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -11,12 +7,11 @@ const supabase = createClient(
 );
 
 function generateCode() {
-  const bytes = randomBytes(5);
-  const hex = bytes.toString('hex').toUpperCase();
+  const hex = randomBytes(4).toString('hex').toUpperCase();
   return `COPILOT-${hex.slice(0, 4)}-${hex.slice(4, 8)}`;
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -32,13 +27,12 @@ export default async function handler(req, res) {
     code,
     used: false,
     note: note || null,
-    created_at: new Date().toISOString(),
-    expires_at: null  // no expiry by default
+    created_at: new Date().toISOString()
   });
 
   if (error) {
-    return res.status(500).json({ error: 'Failed to create token' });
+    return res.status(500).json({ error: 'Failed to create token', detail: error.message });
   }
 
   return res.status(200).json({ token: code });
-}
+};

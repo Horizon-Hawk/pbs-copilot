@@ -80,7 +80,21 @@ async function onSession(data) {
   document.getElementById('state-connected').classList.remove('hidden');
 
   if (data.period) {
-    await loadPairings(data.period);
+    loadPairings(data.period);    // non-blocking — display only
+    loadPersonData(data.period);  // non-blocking — absences for bid building
+  }
+}
+
+async function loadPersonData(period) {
+  try {
+    const xml = await navblue.getPersonData(period);
+    const parsed = navblue.parsePersonData(xml);
+    session.absences = (parsed.absences || []).filter(a => !a.historical);
+    session.personXml = xml;
+    console.log('[PBS] Loaded', session.absences.length, 'active absences');
+  } catch (e) {
+    console.warn('[PBS] Person data load failed:', e.message);
+    session.absences = [];
   }
 }
 
@@ -232,12 +246,35 @@ function buildModelFromConstants() {
     prefer_off.push('Weekends');
   }
 
+  // Auto-add pre-awarded absence date ranges as prefer_off
+  for (const absence of (session?.absences || [])) {
+    const dates = expandDateRange(absence.start, absence.end);
+    if (dates.length) prefer_off.push({ dates });
+  }
+
   return {
     avoid_employees: constants.avoid_employees || [],
     avoid_pairings,
     prefer_off,
     line_conditions
   };
+}
+
+function expandDateRange(start, end) {
+  const norm = d => {
+    if (!d) return null;
+    return d.includes('-') ? d : `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+  };
+  const s = norm(start), e = norm(end);
+  if (!s || !e) return [];
+  const dates = [];
+  const cur = new Date(s + 'T00:00:00Z');
+  const endDate = new Date(e + 'T00:00:00Z');
+  while (cur <= endDate) {
+    dates.push(cur.toISOString().slice(0, 10));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return dates;
 }
 
 async function buildBid() {
@@ -257,6 +294,8 @@ async function buildBid() {
     const model = await buildBidFromPreferences({
       preferences,
       pairings: rawPairings,
+      absences: session?.absences || [],
+      period: session?.period,
       apiKey
     });
 
@@ -319,8 +358,9 @@ async function submitBid() {
     showStatus('submit-status', 'error', 'Build a bid first');
     return;
   }
-  if (!session?.period) {
-    showStatus('submit-status', 'error', 'No bid period detected — open PBS and navigate to your bid');
+  const period = (session?.period || document.getElementById('period-input').value.trim()).toUpperCase();
+  if (!period) {
+    showStatus('submit-status', 'error', 'Enter the bid period (e.g. JUL26)');
     return;
   }
 
@@ -355,7 +395,15 @@ async function submitBid() {
     showStatus('submit-status', 'loading', 'Submitting bid to NavBlue...');
 
     const xml = buildBidXml(bidModel);
-    await navblue.submitBid(session.period, xml);
+    console.log('[PBS] Submitting BidLines XML:', xml);
+    await navblue.submitBid(period, xml);
+
+    // Only consume the token after NavBlue confirms success
+    await fetch(`${endpoint}/api/consume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
 
     document.getElementById('token-input').value = '';
     showStatus('submit-status', 'success', 'Bid submitted successfully!');
@@ -417,6 +465,19 @@ function bindEvents() {
   // Submit bid
   document.getElementById('btn-submit').addEventListener('click', submitBid);
 
+  // Round-trip debug
+  document.getElementById('btn-roundtrip').addEventListener('click', async () => {
+    const period = (session?.period || document.getElementById('period-input').value.trim()).toUpperCase();
+    if (!period || !navblue) { showStatus('submit-status', 'error', 'Not connected'); return; }
+    showStatus('submit-status', 'loading', 'Round-trip test — posting existing bid back unchanged...');
+    try {
+      await navblue.roundTripTest(period);
+      showStatus('submit-status', 'success', 'Round-trip OK — BidSets structure is accepted');
+    } catch (e) {
+      showStatus('submit-status', 'error', `Round-trip failed: ${e.message}`);
+    }
+  });
+
   // Pairing search
   document.getElementById('pairing-search').addEventListener('input', renderPairings);
 
@@ -429,10 +490,17 @@ function bindEvents() {
   const pairingBody = document.getElementById('pairings-body');
   if (pairingHeader && pairingBody) bindToggle(pairingHeader, pairingBody);
 
-  // Messages from background (session data)
+  // Messages from background (session data) — only re-init if token changed
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'NAVBLUE_DATA') {
-      onSession(message.data);
+      const incoming = message.data;
+      if (!session || incoming.token !== session.token) {
+        onSession(incoming);
+      } else if (incoming.period && !session.period) {
+        session.period = incoming.period;
+        document.getElementById('header-meta').textContent =
+          `${incoming.alc.toUpperCase()} · ${incoming.period}`;
+      }
     }
   });
 }

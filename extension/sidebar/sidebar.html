@@ -78,8 +78,10 @@
       </div>
       <div class="section-body">
         <div id="bid-preview"></div>
+        <input id="period-input" type="text" placeholder="Bid period (e.g. JUL26)">
         <input id="token-input" type="text" placeholder="Submission token (COPILOT-XXXX-XXXX)">
         <button class="btn-primary btn-submit" id="btn-submit">Submit Bid</button>
+        <button class="btn-secondary" id="btn-roundtrip" style="margin-top:4px;font-size:11px;">Debug: Round-trip existing bid</button>
         <div id="submit-status" class="hidden"></div>
       </div>
     </div>
@@ -93,9 +95,9 @@
       <button id="btn-close-settings">✕</button>
     </div>
     <div class="overlay-body">
-      <label>Claude API Key</label>
+      <label for="setting-api-key">Claude API Key</label>
       <input id="setting-api-key" type="password" placeholder="sk-ant-...">
-      <label>Validation Endpoint</label>
+      <label for="setting-endpoint">Validation Endpoint</label>
       <input id="setting-endpoint" type="text" placeholder="https://your-vercel-app.vercel.app">
       <button class="btn-primary" id="btn-save-settings">Save</button>
     </div>
@@ -108,24 +110,24 @@
       <button id="btn-close-constants">✕</button>
     </div>
     <div class="overlay-body">
-      <label>Avoid employees (comma-separated IDs)</label>
+      <label for="const-employees">Avoid employees (comma-separated IDs)</label>
       <input id="const-employees" type="text" placeholder="12345, 67890">
 
-      <label>Avoid check-in before</label>
+      <label for="const-checkin-before">Avoid check-in before</label>
       <input id="const-checkin-before" type="time" value="06:00">
 
-      <label>Min hours between trips</label>
+      <label for="const-min-between">Min hours between trips</label>
       <input id="const-min-between" type="number" value="48" min="0" max="120">
 
-      <label>Always avoid stations (comma-separated)</label>
+      <label for="const-avoid-stations">Always avoid stations (comma-separated)</label>
       <input id="const-avoid-stations" type="text" placeholder="YVR, BUR, MRY">
 
-      <label>Prefer off</label>
+      <div class="form-label">Prefer off</div>
       <label class="checkbox-row">
         <input id="const-prefer-weekends" type="checkbox" checked> Weekends
       </label>
 
-      <label>Max days on in a row</label>
+      <label for="const-max-days-on">Max days on in a row</label>
       <input id="const-max-days-on" type="number" value="5" min="1" max="7">
 
       <button class="btn-primary" id="btn-save-constants">Save Constants</button>
@@ -139,16 +141,16 @@
       <button id="btn-close-group-editor">✕</button>
     </div>
     <div class="overlay-body">
-      <label>Group name</label>
+      <label for="group-name">Group name</label>
       <input id="group-name" type="text" placeholder="e.g. Ideal — SFO/LAX 4-day">
 
-      <label>Avoid pairings (plain English)</label>
+      <label for="group-avoids">Avoid pairings (plain English)</label>
       <textarea id="group-avoids" placeholder="e.g. no 1 or 2-day trips, no check-ins before 7am"></textarea>
 
-      <label>Award / prefer pairings (plain English)</label>
+      <label for="group-awards">Award / prefer pairings (plain English)</label>
       <textarea id="group-awards" placeholder="e.g. SFO or LAX layovers, 4-day trips"></textarea>
 
-      <label>Cherry-picked pairing numbers</label>
+      <label for="group-specific">Cherry-picked pairing numbers</label>
       <input id="group-specific" type="text" placeholder="G3027, G3043, G3068">
 
       <label class="checkbox-row">

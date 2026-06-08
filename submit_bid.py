@@ -231,9 +231,9 @@ async def login(page):
     print("URL after login:", page.url)
 
 
-async def main(submit=False, dry_run=False, target='current'):
+async def main(submit=False, dry_run=False, target='current', period=PERIOD):
     bid_lines_xml = build_bid_lines_xml(CHERRY_PICKS)
-    print(f"Built bid XML (target: {target}):")
+    print(f"Built bid XML (target: {target}, period: {period}):")
     print(bid_lines_xml[:600], "...")
     print(f"\nTrips: {CHERRY_PICKS}")
 
@@ -273,7 +273,7 @@ async def main(submit=False, dry_run=False, target='current'):
         print("\nFetching person data...")
         person_result = await page.evaluate(f"""
             async (jwt) => {{
-                const url = '{BASE}/fcgi-bin/ClassBidUI?alc={alc}&authmode=Bidder&customModifiedTime={ts}&FileType=person&function=get&period={PERIOD}&skipbidset=false';
+                const url = '{BASE}/fcgi-bin/ClassBidUI?alc={alc}&authmode=Bidder&customModifiedTime={ts}&FileType=person&function=get&period={period}&skipbidset=false';
                 const headers = {{'Accept': 'application/json, text/plain, */*', 'Cache-Control': 'no-cache'}};
                 if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
                 const r = await fetch(url, {{credentials:'include', headers}});
@@ -340,7 +340,7 @@ async def main(submit=False, dry_run=False, target='current'):
 
         # Step 3: POST the bid — pass body as argument to avoid JS template escaping issues
         ts2 = int(time.time() * 1000)
-        post_url = f"{BASE}/fcgi-bin/ClassBidUI?alc={alc}&authmode=Bidder&customModifiedTime={ts2}&FileType=bidset&function=set&period={PERIOD}"
+        post_url = f"{BASE}/fcgi-bin/ClassBidUI?alc={alc}&authmode=Bidder&customModifiedTime={ts2}&FileType=bidset&function=set&period={period}"
         print(f"\nPOSTing to: {post_url}")
 
         submit_result = await page.evaluate("""
@@ -383,5 +383,8 @@ if __name__ == "__main__":
     parser.add_argument('--dry-run', action='store_true', help='Stop after building POST body, do not submit')
     parser.add_argument('--target', choices=['current', 'default'], default='current',
                         help='Bid target: current (window must be open) or default (always editable)')
+    parser.add_argument('--period', default=PERIOD,
+                        help='Bid period e.g. AUG26 (default: %(default)s)')
     args_cli = parser.parse_args()
-    asyncio.run(main(submit=args_cli.submit, dry_run=args_cli.dry_run, target=args_cli.target))
+    asyncio.run(main(submit=args_cli.submit, dry_run=args_cli.dry_run,
+                     target=args_cli.target, period=args_cli.period))

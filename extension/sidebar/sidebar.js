@@ -83,6 +83,11 @@ async function onSession(data) {
   document.getElementById('state-disconnected').classList.add('hidden');
   document.getElementById('state-connected').classList.remove('hidden');
 
+  // Hide token input when no validation endpoint is configured
+  chrome.storage.local.get('endpoint').then(({ endpoint }) => {
+    document.getElementById('token-input').style.display = endpoint ? '' : 'none';
+  });
+
   if (data.period) {
     loadPairings(data.period);    // non-blocking — display only
     loadPersonData(data.period);  // non-blocking — absences for bid building
@@ -444,51 +449,51 @@ async function submitBid() {
     return;
   }
 
+  const { endpoint } = await chrome.storage.local.get('endpoint');
   const token = document.getElementById('token-input').value.trim();
-  if (!token) {
+
+  // Token gate is optional — if no endpoint is configured, submit directly
+  const useTokenGate = !!endpoint;
+
+  if (useTokenGate && !token) {
     showStatus('submit-status', 'error', 'Enter your submission token');
     return;
   }
 
-  const { endpoint } = await chrome.storage.local.get('endpoint');
-  if (!endpoint) {
-    showStatus('submit-status', 'error', 'Validation endpoint not set — open Settings');
-    return;
-  }
-
   document.getElementById('btn-submit').disabled = true;
-  showStatus('submit-status', 'loading', 'Validating token...');
 
   try {
-    // Validate token
-    const vRes = await fetch(`${endpoint}/api/validate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token })
-    });
-
-    const vData = await vRes.json();
-    if (!vRes.ok || !vData.valid) {
-      throw new Error(vData.error || 'Invalid or already-used token');
+    if (useTokenGate) {
+      showStatus('submit-status', 'loading', 'Validating token...');
+      const vRes = await fetch(`${endpoint}/api/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+      const vData = await vRes.json();
+      if (!vRes.ok || !vData.valid) {
+        throw new Error(vData.error || 'Invalid or already-used token');
+      }
     }
-
-    showStatus('submit-status', 'loading', 'Submitting bid to NavBlue...');
 
     const targetEl = document.querySelector('input[name="bid-target"]:checked');
     const target = targetEl?.value || 'current';
+    showStatus('submit-status', 'loading', `Submitting ${target} bid to NavBlue...`);
+
     const xml = buildBidXml(bidModel);
     console.log('[PBS] Submitting BidLines XML (target:', target, '):', xml);
     await navblue.submitBid(period, xml, target);
 
-    // Only consume the token after NavBlue confirms success
-    await fetch(`${endpoint}/api/consume`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token })
-    });
+    if (useTokenGate) {
+      await fetch(`${endpoint}/api/consume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+      document.getElementById('token-input').value = '';
+    }
 
-    document.getElementById('token-input').value = '';
-    showStatus('submit-status', 'success', 'Bid submitted successfully!');
+    showStatus('submit-status', 'success', `${target === 'default' ? 'Default' : 'Current'} bid submitted!`);
   } catch (e) {
     showStatus('submit-status', 'error', e.message);
   } finally {

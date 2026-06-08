@@ -181,38 +181,43 @@ async function loadPairings(period) {
 function showPairingsPrompt(listEl, countEl, period) {
   countEl.textContent = '!';
   listEl.innerHTML = `
-    <div class="status-info" style="font-size:12px;line-height:1.8;">
+    <div class="status-info" style="font-size:12px;line-height:1.6;">
       <strong>Pairings not captured yet</strong><br>
-      <strong>Step 1:</strong> Click "Reload NavBlue tab" below<br>
-      <strong>Step 2:</strong> Wait for NavBlue to finish loading<br>
-      <strong>Step 3:</strong> Navigate to the Pairings section in NavBlue<br>
-      <strong>Step 4:</strong> Click Retry here
+      Click <em>Reload NavBlue tab</em>, wait for it to finish loading,
+      then navigate to the Pairings section. The sidebar will update automatically.
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;">
       <button id="btn-reload-navblue" class="btn-secondary" style="font-size:11px;flex:1;">↻ Reload NavBlue tab</button>
-      <button id="btn-retry-pairings" class="btn-secondary" style="font-size:11px;flex:1;">🔄 Retry</button>
+      <button id="btn-retry-pairings" class="btn-secondary" style="font-size:11px;flex:1;">🔄 Check again</button>
     </div>
-    <div style="margin-top:10px;">
-      <details>
-        <summary style="font-size:11px;color:#94a3b8;cursor:pointer;">Paste pairings XML manually</summary>
-        <textarea id="pairings-paste" placeholder="Paste NavBlue pairings XML here…"
-          style="width:100%;height:80px;margin-top:4px;font-size:10px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:4px;padding:4px;box-sizing:border-box;resize:vertical;"></textarea>
-        <button id="btn-parse-paste" class="btn-secondary" style="font-size:11px;margin-top:4px;width:100%;">Load from paste</button>
-      </details>
-    </div>`;
+    <details style="margin-top:10px;">
+      <summary style="font-size:11px;color:#94a3b8;cursor:pointer;">Paste pairings XML manually (fallback)</summary>
+      <div style="font-size:10px;color:#94a3b8;margin:4px 0;">In NavBlue DevTools → Network → find ClassBidUI request → copy Response</div>
+      <textarea id="pairings-paste" placeholder="Paste NavBlue pairings XML here…"
+        style="width:100%;height:80px;margin-top:4px;font-size:10px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:4px;padding:4px;box-sizing:border-box;resize:vertical;"></textarea>
+      <button id="btn-parse-paste" class="btn-secondary" style="font-size:11px;margin-top:4px;width:100%;">Load from paste</button>
+    </details>`;
 
   document.getElementById('btn-reload-navblue')?.addEventListener('click', async () => {
     const tabs = await chrome.tabs.query({ url: '*://*.pbs.vmc.navblue.cloud/*' });
-    if (tabs.length) {
-      chrome.tabs.reload(tabs[0].id);
-      listEl.innerHTML = '<div class="status-loading" style="font-size:12px;">Reloading NavBlue… navigate to Pairings after it loads, then click Retry.</div>';
-      countEl.textContent = '…';
-    } else {
-      listEl.innerHTML = '<div class="status-error" style="font-size:12px;">NavBlue tab not found — open NavBlue first.</div>';
+    if (!tabs.length) {
+      listEl.querySelector('.status-info').textContent = 'NavBlue tab not found — open NavBlue first.';
+      return;
     }
+    chrome.tabs.reload(tabs[0].id);
+    countEl.textContent = '…';
+    listEl.innerHTML = `<div class="status-loading" style="font-size:12px;line-height:1.6;">
+      Reloading NavBlue tab…<br>
+      After it finishes loading, open the <strong>Pairings</strong> section.<br>
+      The list will populate automatically — no need to click anything here.
+    </div>`;
   });
 
-  document.getElementById('btn-retry-pairings')?.addEventListener('click', () => loadPairings(period));
+  document.getElementById('btn-retry-pairings')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-retry-pairings');
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+    await loadPairings(period);
+  });
 
   document.getElementById('btn-parse-paste')?.addEventListener('click', () => {
     const xml = document.getElementById('pairings-paste')?.value?.trim();
@@ -225,7 +230,7 @@ function showPairingsPrompt(listEl, countEl, period) {
         renderPairings();
         chrome.storage.local.set({ cachedPairingsXml: xml });
       } else {
-        alert('No <Pairing> elements found in pasted XML.');
+        alert('No <Pairing> elements found in pasted XML. Try a different request from the Network tab.');
       }
     } catch (e) {
       alert('Parse error: ' + e.message);

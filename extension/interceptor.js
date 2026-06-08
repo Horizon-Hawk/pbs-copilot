@@ -15,19 +15,17 @@
     }
   }
 
-  // Intercept fetch
+  // Intercept fetch — no URL filter, catches all same-origin requests
   const _fetch = window.fetch.bind(window);
   window.fetch = function (input, init) {
     const url = typeof input === 'string' ? input : (input && input.url) || '';
     return _fetch(input, init).then(function (res) {
-      if (url.includes('navblue.cloud') || url.includes('ClassBidUI')) {
-        res.clone().text().then(function (t) { relay(url, t); }).catch(function(){});
-      }
+      res.clone().text().then(function (t) { relay(url, t); }).catch(function(){});
       return res;
     });
   };
 
-  // Intercept XHR
+  // Intercept XHR — no URL filter
   const _open = XMLHttpRequest.prototype.open;
   const _send = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.open = function (method, url) {
@@ -37,10 +35,7 @@
   XMLHttpRequest.prototype.send = function () {
     const xhr = this;
     xhr.addEventListener('load', function () {
-      const url = xhr._pbsUrl || '';
-      if (url.includes('navblue.cloud') || url.includes('ClassBidUI')) {
-        relay(url, xhr.responseText);
-      }
+      relay(xhr._pbsUrl || '', xhr.responseText);
     });
     return _send.apply(this, arguments);
   };

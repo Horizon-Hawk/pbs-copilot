@@ -223,17 +223,23 @@ function showPairingsPrompt(listEl, countEl, period) {
   });
 
   document.getElementById('btn-parse-paste')?.addEventListener('click', () => {
-    const xml = document.getElementById('pairings-paste')?.value?.trim();
-    if (!xml) return;
+    const text = document.getElementById('pairings-paste')?.value?.trim();
+    if (!text) return;
     try {
-      const parsed = parsePairingsXml(xml);
-      if (parsed.length) {
+      const isJson = text.startsWith('[') || text.startsWith('{');
+      const parsed = isJson ? parsePairingsJson(text) : parsePairingsXml(text);
+      console.log('[PBS] Paste parsed', parsed.length, 'pairings (format:', isJson ? 'json' : 'xml', ')');
+      if (parsed.length && parsed.some(p => p.number)) {
         rawPairings = parsed;
         countEl.textContent = rawPairings.length;
         renderPairings();
-        chrome.storage.local.set({ cachedPairingsXml: xml });
+        chrome.storage.local.set({ cachedPairingsXml: text, cachedPairingsFormat: isJson ? 'json' : 'xml' });
       } else {
-        alert('No <Pairing> elements found in pasted XML. Try a different request from the Network tab.');
+        // Show what keys ARE present to help diagnose
+        const sample = isJson
+          ? (() => { try { const d = JSON.parse(text); const arr = Array.isArray(d) ? d : (d.arrPairings || d.pairings || d.data || []); return JSON.stringify(Object.keys(arr[0] || {})); } catch(e) { return e.message; } })()
+          : 'check console for <Pairing> attributes';
+        alert(`Parsed 0 usable pairings.\nSample keys found: ${sample}\nCheck the browser console for more detail.`);
       }
     } catch (e) {
       alert('Parse error: ' + e.message);
@@ -724,7 +730,14 @@ function bindEvents() {
 function parsePairingsXml(xml) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, 'text/xml');
-  return [...doc.querySelectorAll('Pairing')].map(p => ({
+  const nodes = [...doc.querySelectorAll('Pairing')];
+  if (nodes.length > 0) {
+    // Log actual attribute names from the first element so we can verify the mapping
+    const attrs = {};
+    for (const a of nodes[0].attributes) attrs[a.name] = a.value;
+    console.log('[PBS] parsePairingsXml first <Pairing> attributes:', JSON.stringify(attrs));
+  }
+  return nodes.map(p => ({
     number: p.getAttribute('Number'),
     length: p.getAttribute('Length'),
     checkin: p.getAttribute('CheckIn'),

@@ -20,7 +20,10 @@ window.addEventListener('message', (e) => {
   }
   if (e.data && e.data.type === '__PBS_PAIRINGS__') {
     console.log('[PBS intercept] PAIRINGS CAPTURED from', e.data.url, 'size:', e.data.data?.length);
-    chrome.runtime.sendMessage({ type: 'NAVBLUE_PAIRINGS_CAPTURED', data: e.data.data, url: e.data.url });
+    chrome.runtime.sendMessage({ type: 'NAVBLUE_PAIRINGS_CAPTURED', data: e.data.data, url: e.data.url, format: e.data.format });
+  }
+  if (e.data && e.data.type === '__PBS_NAV_FAILED__') {
+    chrome.runtime.sendMessage({ type: 'NAVBLUE_NAV_FAILED' });
   }
 });
 

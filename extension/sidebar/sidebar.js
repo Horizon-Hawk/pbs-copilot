@@ -203,41 +203,87 @@ function showPairingsPrompt(listEl, countEl, period) {
       return;
     }
     const tabId = tabs[0].id;
-    listEl.innerHTML = '<div class="status-loading" style="font-size:12px;">Navigating NavBlue to Pairings… sidebar will update automatically.</div>';
+    listEl.innerHTML = '<div class="status-loading" style="font-size:12px;">Loading pairings from NavBlue…</div>';
     countEl.textContent = '…';
     try {
-      const [{ result }] = await chrome.scripting.executeScript({
+      await chrome.scripting.executeScript({
         target: { tabId },
         func: () => {
-          // Try Angular $location route change first
+          function extractAndPost() {
+            try {
+              const ng = window.angular;
+              if (!ng) return false;
+              const allEls = document.querySelectorAll('[ng-controller],[data-ng-controller]');
+              for (const el of allEls) {
+                try {
+                  let scope = ng.element(el).scope();
+                  // Walk up to $rootScope to search broadly
+                  const checked = new Set();
+                  while (scope && !checked.has(scope.$id)) {
+                    checked.add(scope.$id);
+                    for (const key of Object.keys(scope)) {
+                      if (key.startsWith('$')) continue;
+                      const v = scope[key];
+                      // PairingData wrapper: has .arrPairings with strPairingNumber
+                      const arr = (v && !Array.isArray(v) && Array.isArray(v.arrPairings)) ? v.arrPairings
+                                : (Array.isArray(v) ? v : null);
+                      if (arr && arr.length > 0 && arr[0] && arr[0].strPairingNumber) {
+                        window.postMessage({ type: '__PBS_PAIRINGS__', url: 'angular-scope:' + key, data: JSON.stringify(arr), format: 'json' }, '*');
+                        return true;
+                      }
+                    }
+                    scope = scope.$parent;
+                  }
+                } catch(e) {}
+              }
+            } catch(e) {}
+            return false;
+          }
+
+          // Try extracting immediately (already on pairings page)
+          if (extractAndPost()) return { method: 'scope-immediate' };
+
+          // Navigate to pairings, then extract after Angular loads the data
+          let navigated = false;
           try {
-            const inj = window.angular?.element(document.body)?.injector?.();
+            const inj = ng?.element(document.body)?.injector?.();
             if (inj) {
               const $loc = inj.get('$location');
               const $rs  = inj.get('$rootScope');
               const cur  = $loc.path() || '';
               if (!cur.toLowerCase().includes('pairing')) {
-                for (const p of ['/pairings', '/bid/pairings', '/bidding/pairings', '/schedule/pairings', '/pairing']) {
-                  try { $loc.path(p); $rs.$apply(); return { method: 'angular', path: p }; } catch(e) {}
+                for (const p of ['/pairings', '/bid/pairings', '/bidding/pairings', '/schedule/pairings']) {
+                  try { $loc.path(p); $rs.$apply(); navigated = true; break; } catch(e) {}
                 }
               }
-              return { method: 'angular-already', path: cur };
             }
           } catch(e) {}
-          // Fallback: find and click a nav link that mentions Pairings
-          const els = [
-            ...document.querySelectorAll('[ui-sref*="pairing"],[href*="pairing"],[ng-click*="pairing"]'),
-            ...[...document.querySelectorAll('a,li,button,.nav-item,[role="menuitem"]')]
-              .filter(el => /\bpairings?\b/i.test(el.textContent.trim()))
-          ];
-          if (els.length) { els[0].click(); return { method: 'click', text: els[0].textContent.trim().slice(0,40) }; }
-          return { method: 'none' };
+
+          // Click-based fallback if Angular route failed
+          if (!navigated) {
+            const els = [
+              ...document.querySelectorAll('[ui-sref*="pairing"],[href*="pairing"],[ng-click*="pairing"]'),
+              ...[...document.querySelectorAll('a,li,button,.nav-item,[role="menuitem"]')]
+                .filter(el => /\bpairings?\b/i.test(el.textContent.trim()))
+            ];
+            if (els.length) { els[0].click(); navigated = true; }
+          }
+
+          if (!navigated) {
+            window.postMessage({ type: '__PBS_NAV_FAILED__' }, '*');
+            return { method: 'none' };
+          }
+
+          // Poll for pairings in Angular scope after navigation (up to 8 seconds)
+          let attempts = 0;
+          const poll = setInterval(() => {
+            attempts++;
+            if (extractAndPost() || attempts >= 16) clearInterval(poll);
+          }, 500);
+
+          return { method: 'navigated' };
         }
       });
-      if (result?.method === 'none') {
-        listEl.innerHTML = '<div class="status-info" style="font-size:12px;">Could not auto-navigate — switch to the NavBlue tab and click Pairings, then the sidebar updates automatically.</div>';
-      }
-      console.log('[PBS] Nav-to-pairings result:', result);
     } catch(e) {
       listEl.innerHTML = `<div class="status-error" style="font-size:12px;">Script injection failed: ${escHtml(e.message)}</div>`;
     }
@@ -730,7 +776,7 @@ function bindEvents() {
   // Messages from background (session data) — only re-init if token changed
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'NAVBLUE_PAIRINGS_CAPTURED') {
-      console.log('[PBS] Pairings captured by interceptor from', message.url, 'format:', message.format, 'size:', message.data?.length);
+      console.log('[PBS] Pairings captured from', message.url, 'format:', message.format, 'size:', message.data?.length);
       try {
         const parsed = message.format === 'json'
           ? parsePairingsJson(message.data)
@@ -738,13 +784,21 @@ function bindEvents() {
         if (parsed.length) {
           rawPairings = parsed;
           document.getElementById('pairings-count').textContent = rawPairings.length;
+          document.getElementById('pairings-list').innerHTML = ''; // clear prompt
           renderPairings();
           chrome.storage.local.set({ cachedPairingsXml: message.data, cachedPairingsFormat: message.format, cachedPairingsUrl: message.url });
-          console.log('[PBS] Loaded', rawPairings.length, 'pairings from interceptor');
+          console.log('[PBS] Loaded', rawPairings.length, 'pairings');
+        } else {
+          console.warn('[PBS] parsePairings returned 0 items — format:', message.format, 'preview:', message.data?.slice(0,200));
         }
       } catch (e) {
-        console.warn('[PBS] Failed to parse intercepted pairings:', e.message);
+        console.warn('[PBS] Failed to parse pairings:', e.message, 'preview:', message.data?.slice(0,200));
       }
+    }
+
+    if (message.type === 'NAVBLUE_NAV_FAILED') {
+      const listEl = document.getElementById('pairings-list');
+      if (listEl) listEl.innerHTML = '<div class="status-info" style="font-size:12px;">Auto-navigate failed — switch to NavBlue and click Pairings manually.</div>';
     }
 
     if (message.type === 'NAVBLUE_DATA') {

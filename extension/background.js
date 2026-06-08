@@ -1,3 +1,16 @@
+// On install/reload, re-inject content script into any already-open NavBlue tabs
+// Without this, reloading the extension leaves existing tabs with no content script
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.tabs.query({ url: '*://*.pbs.vmc.navblue.cloud/*' }, (tabs) => {
+    for (const tab of tabs) {
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
+      }).catch(() => {});
+    }
+  });
+});
+
 // Opens sidebar when extension icon is clicked on a NavBlue page
 chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ tabId: tab.id });

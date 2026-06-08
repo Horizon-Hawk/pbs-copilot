@@ -18,10 +18,17 @@ async function init() {
   renderConstantsSummary();
   bindEvents();
 
-  // Request session from content script
-  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+  // Try storage first (content script writes here directly, works even when background is asleep)
+  const { navblueSession } = await chrome.storage.local.get('navblueSession');
+  if (navblueSession?.token) {
+    onSession(navblueSession);
+    return;
+  }
+
+  // Fallback: ask the NavBlue tab to re-send session data
+  chrome.tabs.query({ url: '*://*.pbs.vmc.navblue.cloud/*' }, tabs => {
     if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, { type: 'REQUEST_SESSION' });
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'REQUEST_SESSION' }).catch(() => {});
     }
   });
 }
@@ -645,6 +652,7 @@ function bindEvents() {
 
     if (message.type === 'NAVBLUE_DATA') {
       const incoming = message.data;
+      chrome.storage.local.set({ navblueSession: incoming });
       if (!session || incoming.token !== session.token) {
         onSession(incoming);
       } else if (incoming.period && !session.period) {

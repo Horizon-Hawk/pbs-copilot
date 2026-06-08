@@ -80,15 +80,18 @@ function sendSessionData() {
   const alc = getAlc();
   if (!token || !alc) return;
 
-  chrome.runtime.sendMessage({
-    type: 'NAVBLUE_DATA',
-    data: {
-      token,
-      alc,
-      baseUrl: `https://${alc}.pbs.vmc.navblue.cloud`,
-      period: extractPeriodFromDom()
-    }
-  });
+  const data = {
+    token,
+    alc,
+    baseUrl: `https://${alc}.pbs.vmc.navblue.cloud`,
+    period: extractPeriodFromDom()
+  };
+
+  // Write directly to storage — works even when background service worker is asleep
+  chrome.storage.local.set({ navblueSession: data });
+
+  // Also try message passing (best-effort; background may be sleeping)
+  chrome.runtime.sendMessage({ type: 'NAVBLUE_DATA', data }).catch(() => {});
 }
 
 sendSessionData();

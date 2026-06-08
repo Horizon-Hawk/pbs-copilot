@@ -18,6 +18,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Forward NavBlue session data from content script to sidebar
   if (message.type === 'NAVBLUE_DATA') {
+    // Persist so sidebar can read it on open even if the broadcast was missed
+    chrome.storage.local.set({ navblueSession: message.data });
     chrome.runtime.sendMessage({ type: 'NAVBLUE_DATA', data: message.data }).catch(() => {});
     return false;
   }

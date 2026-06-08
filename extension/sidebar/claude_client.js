@@ -123,6 +123,19 @@ Valid waive values: "MinimumDaysOffTo2", "1DayOffIn7", "2ConsecutiveDaysOff",
 "Short trips home quickly" / "quick turnarounds":
   award: { "type": "TimeAwayFromBase", "operator": "LT", "time": "036:00" }
 
+━━━ CREDIT TARGETING ━━━
+When a credit_context block is provided in the user message:
+- Group 1: cherry-pick the specific pairings listed in credit_context.cherry_picks (specific_pairings array)
+  Name this group "Target ${credit_context.remaining_hours}h — Cherry-picks"
+- Group 2: fallback — award 4-day trips (PairingLength EQ 4)
+  Name this group "Fallback — 4-Day Trips"
+- Group 3: fallback — award 3-day trips (PairingLength EQ 3)
+  Name this group "Fallback — 3-Day Trips"
+- DO NOT use generic PairingCredit award rules in the cherry-pick group — specific_pairings already targets the right trips
+- The last group must have else_start_next: false
+
+When no credit values are available for pairings, structure by trip length only (longest first).
+
 ━━━ ABSENCE HANDLING ━━━
 When pre-awarded absences are provided:
 - Those dates are automatically blocked as prefer_off — do NOT add them again
@@ -134,16 +147,66 @@ GEG SEA PDX BOI YVR YYC SFO LAX SAN OAK SJC SMF RNO LAS PHX TUS
 BUR MRY SNA RDM EUG MFR ALW PSC YKM ANC FAI`;
 
 
-export async function buildBidFromPreferences({ preferences, pairings, absences, period, apiKey }) {
+function toMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const parts = timeStr.split(':').map(Number);
+  return parts[0] * 60 + (parts[1] || 0);
+}
+
+function selectCreditTargetPairings(pairings, remainingHours) {
+  const targetMins = Math.round(remainingHours * 60);
+  if (targetMins <= 0) return null;
+
+  const withCredit = pairings
+    .filter(p => p.credit && toMinutes(p.credit) > 0)
+    .map(p => ({ ...p, creditMins: toMinutes(p.credit) }))
+    .sort((a, b) => b.creditMins - a.creditMins); // highest credit first = fewest trips
+
+  if (!withCredit.length) return null;
+
+  // Greedy: pick highest-credit trips until we reach the target
+  const selected = [];
+  let total = 0;
+  for (const p of withCredit) {
+    if (total >= targetMins) break;
+    selected.push(p);
+    total += p.creditMins;
+  }
+
+  const h = Math.floor(total / 60);
+  const m = String(total % 60).padStart(2, '0');
+  return {
+    cherry_picks: selected.map(p => p.number),
+    total_credit: `${h}:${m}`,
+    trip_count: selected.length,
+    remaining_hours: remainingHours
+  };
+}
+
+export async function buildBidFromPreferences({ preferences, pairings, absences, period, apiKey, preAwardCredit = 0, minCredit = 75 }) {
   const absenceContext = absences?.length
     ? `\n\nPre-awarded days off this period (already blocked in the system):\n${absences.map(a =>
         `  ${a.code}: ${a.start} → ${a.end}`
       ).join('\n')}\nThese dates are automatically added as prefer_off. Build the bid to complement this schedule.\n`
     : '';
 
+  const remainingCredit = Math.max(0, minCredit - preAwardCredit);
+  const creditContext = selectCreditTargetPairings(pairings || [], remainingCredit);
+
+  const creditMathContext = preAwardCredit > 0 || creditContext
+    ? `\n\nCredit math:\n` +
+      `  Pre-award credit this period: ${preAwardCredit}h\n` +
+      `  Minimum credit target: ${minCredit}h\n` +
+      `  Remaining credit to fill via bidding: ${remainingCredit}h\n` +
+      (creditContext
+        ? `  credit_context: ${JSON.stringify(creditContext)}\n` +
+          `  (These ${creditContext.trip_count} trips sum to ${creditContext.total_credit}h — fewest trips to reach target)\n`
+        : `  (No credit values available in pairings — structure by trip length)\n`)
+    : '';
+
   const pairingContext = pairings?.length
     ? `\n\nAvailable pairings this period (${pairings.length} total, showing first 80):\n${pairings.slice(0, 80).map(p =>
-        `${p.number}: ${p.length}-day, CI ${p.checkin}, CO ${p.checkout}, layovers: ${p.layovers.join('/') || 'none'}`
+        `${p.number}: ${p.length}-day, credit ${p.credit || '?'}, CI ${p.checkin}, CO ${p.checkout}, layovers: ${p.layovers.join('/') || 'none'}`
       ).join('\n')}`
     : '';
 
@@ -159,7 +222,7 @@ export async function buildBidFromPreferences({ preferences, pairings, absences,
       messages: [
         {
           role: 'user',
-          content: `Build a bid model for these preferences:\n\n${preferences}${periodContext}${absenceContext}${pairingContext}`
+          content: `Build a bid model for these preferences:\n\n${preferences}${periodContext}${absenceContext}${creditMathContext}${pairingContext}`
         }
       ]
     }

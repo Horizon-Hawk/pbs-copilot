@@ -44,7 +44,8 @@ async function loadStorage() {
     prefer_weekends: true,
     max_days_on: 6,
     min_credit: 75,
-    max_credit: 90
+    max_credit: 90,
+    pre_award_credit: 0
   };
   groups = data.groups || [];
 
@@ -69,7 +70,8 @@ async function saveConstants() {
     prefer_weekends: document.getElementById('const-prefer-weekends').checked,
     max_days_on: parseInt(document.getElementById('const-max-days-on').value) || 6,
     min_credit: parseInt(document.getElementById('const-min-credit').value) || 75,
-    max_credit: parseInt(document.getElementById('const-max-credit').value) || 90
+    max_credit: parseInt(document.getElementById('const-max-credit').value) || 90,
+    pre_award_credit: parseFloat(document.getElementById('const-pre-award-credit').value) || 0
   };
   await chrome.storage.local.set({ constants });
   renderConstantsSummary();
@@ -376,6 +378,8 @@ function renderConstantsSummary() {
     items.push('Prefer weekends off');
   if (constants.max_days_on)
     items.push(`Max ${constants.max_days_on} days on`);
+  if (constants.pre_award_credit)
+    items.push(`Pre-award ${constants.pre_award_credit}h → need ${Math.max(0, (constants.min_credit || 75) - constants.pre_award_credit)}h more`);
   if (constants.min_credit)
     items.push(`Min credit ${constants.min_credit}h`);
   if (constants.max_credit)
@@ -530,7 +534,9 @@ async function buildBid() {
       pairings: rawPairings,
       absences: session?.absences || [],
       period: session?.period,
-      apiKey
+      apiKey,
+      preAwardCredit: constants.pre_award_credit || 0,
+      minCredit: constants.min_credit || 75
     });
 
     // Merge user's saved constants into the generated model
@@ -680,6 +686,7 @@ function bindEvents() {
     document.getElementById('const-avoid-stations').value = (constants.avoid_stations || []).join(', ');
     document.getElementById('const-prefer-weekends').checked = constants.prefer_weekends !== false;
     document.getElementById('const-max-days-on').value = constants.max_days_on ?? 6;
+    document.getElementById('const-pre-award-credit').value = constants.pre_award_credit ?? 0;
     document.getElementById('const-min-credit').value = constants.min_credit ?? 75;
     document.getElementById('const-max-credit').value = constants.max_credit ?? 90;
     document.getElementById('panel-constants').classList.remove('hidden');

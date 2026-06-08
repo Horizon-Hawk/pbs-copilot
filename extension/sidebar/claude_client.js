@@ -126,7 +126,7 @@ Valid waive values: "MinimumDaysOffTo2", "1DayOffIn7", "2ConsecutiveDaysOff",
 ━━━ CREDIT TARGETING ━━━
 When a credit_context block is provided in the user message:
 - Group 1: cherry-pick the specific pairings listed in credit_context.cherry_picks (specific_pairings array)
-  Name this group "Target ${credit_context.remaining_hours}h — Cherry-picks"
+  Name this group "Target [remaining_hours]h — Cherry-picks"
 - Group 2: fallback — award 4-day trips (PairingLength EQ 4)
   Name this group "Fallback — 4-Day Trips"
 - Group 3: fallback — award 3-day trips (PairingLength EQ 3)

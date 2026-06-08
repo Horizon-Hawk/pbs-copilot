@@ -157,20 +157,34 @@ function selectCreditTargetPairings(pairings, remainingHours) {
   const targetMins = Math.round(remainingHours * 60);
   if (targetMins <= 0) return null;
 
-  const withCredit = pairings
+  const candidates = pairings
     .filter(p => p.credit && toMinutes(p.credit) > 0)
     .map(p => ({ ...p, creditMins: toMinutes(p.credit) }))
     .sort((a, b) => b.creditMins - a.creditMins); // highest credit first = fewest trips
 
-  if (!withCredit.length) return null;
+  if (!candidates.length) return null;
 
-  // Greedy: pick highest-credit trips until we reach the target
+  // Step 1: greedily add trips (largest first) that don't exceed the target
   const selected = [];
   let total = 0;
-  for (const p of withCredit) {
+  for (const p of candidates) {
     if (total >= targetMins) break;
-    selected.push(p);
-    total += p.creditMins;
+    if (total + p.creditMins <= targetMins) {
+      selected.push(p);
+      total += p.creditMins;
+    }
+  }
+
+  // Step 2: if still short, add whichever single unselected trip lands closest to the gap
+  if (total < targetMins) {
+    const gap = targetMins - total;
+    const filler = candidates
+      .filter(p => !selected.includes(p))
+      .sort((a, b) => Math.abs(a.creditMins - gap) - Math.abs(b.creditMins - gap))[0];
+    if (filler) {
+      selected.push(filler);
+      total += filler.creditMins;
+    }
   }
 
   const h = Math.floor(total / 60);

@@ -153,14 +153,21 @@ function toMinutes(timeStr) {
   return parts[0] * 60 + (parts[1] || 0);
 }
 
-function selectCreditTargetPairings(pairings, remainingHours) {
+function selectCreditTargetPairings(pairings, remainingHours, mode = 'credit') {
   const targetMins = Math.round(remainingHours * 60);
   if (targetMins <= 0) return null;
 
   const candidates = pairings
     .filter(p => p.credit && toMinutes(p.credit) > 0)
-    .map(p => ({ ...p, creditMins: toMinutes(p.credit) }))
-    .sort((a, b) => b.creditMins - a.creditMins); // highest credit first = fewest trips
+    .map(p => {
+      const creditMins = toMinutes(p.credit);
+      const days = parseInt(p.length) || 1;
+      return { ...p, creditMins, creditPerDay: creditMins / days };
+    })
+    .sort((a, b) => mode === 'days_off'
+      ? b.creditPerDay - a.creditPerDay  // highest credit/day = fewest days away
+      : b.creditMins - a.creditMins      // highest total credit = fewest trips
+    );
 
   if (!candidates.length) return null;
 
@@ -206,9 +213,15 @@ export async function buildBidFromPreferences({ preferences, pairings, absences,
 
   const remainingCredit = Math.max(0, minCredit - preAwardCredit);
 
-  // Only cherry-pick for credit when the request is explicitly about credit/hours targeting
-  const isCreditRequest = preAwardCredit > 0 || /\b(min(imum)?\s*credit|fewest\s*trip|least\s*trip|hit\s*min|target.*credit|credit.*target|\b75\s*h|\bhours?\s*target)\b/i.test(preferences);
-  const creditContext = isCreditRequest ? selectCreditTargetPairings(pairings || [], remainingCredit) : null;
+  const isDaysOffRequest = /\b(max(imum)?\s*(days?\s*off|time\s*(off|home))|most\s*(days?\s*(off|home)|time\s*(off|home))|fewest\s*days?\s*(work|away|on))\b/i.test(preferences);
+  const isCreditRequest = preAwardCredit > 0 || isDaysOffRequest || /\b(min(imum)?\s*credit|fewest\s*trip|least\s*trip|hit\s*min|target.*credit|credit.*target|\b75\s*h|\bhours?\s*target)\b/i.test(preferences);
+
+  const selectionMode = isDaysOffRequest ? 'days_off' : 'credit';
+  const creditContext = isCreditRequest ? selectCreditTargetPairings(pairings || [], remainingCredit, selectionMode) : null;
+
+  const modeLabel = isDaysOffRequest
+    ? `fewest days away to reach ${remainingCredit}h (sorted by credit/day)`
+    : `fewest trips to reach ${remainingCredit}h (sorted by total credit)`;
 
   const creditMathContext = isCreditRequest
     ? `\n\nCredit math:\n` +
@@ -217,7 +230,7 @@ export async function buildBidFromPreferences({ preferences, pairings, absences,
       `  Remaining credit to fill via bidding: ${remainingCredit}h\n` +
       (creditContext
         ? `  credit_context: ${JSON.stringify(creditContext)}\n` +
-          `  (These ${creditContext.trip_count} trips sum to ${creditContext.total_credit}h — fewest trips to reach target)\n`
+          `  (Selection mode: ${modeLabel} — ${creditContext.trip_count} trips summing to ${creditContext.total_credit}h)\n`
         : `  (No credit values available in pairings — structure by trip length)\n`)
     : '';
 

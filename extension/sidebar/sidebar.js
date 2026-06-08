@@ -170,19 +170,25 @@ async function loadPairings(period) {
       countEl.textContent = rawPairings.length;
       if (rawPairings.length) { renderPairings(); return; }
     }
-    // If no pairings found, show scope keys so we can debug
+    // Pairings not cached yet — guide user to trigger the interceptor
     const info = res?.scopeKeys ? JSON.stringify(res.scopeKeys, null, 2) : (res?.error || 'unknown');
     console.warn('[PBS] Angular extraction result:', info);
     countEl.textContent = '!';
-    listEl.innerHTML = `<div class="status-error" style="word-break:break-all;font-size:11px;">
-      API returned 400. Angular scope keys:<br><pre style="font-size:10px;overflow:auto;max-height:120px">${escHtml(info)}</pre>
-      <button id="btn-retry-pairings" class="btn-secondary" style="margin-top:6px;font-size:11px;">🔄 Retry</button>
+    listEl.innerHTML = `<div class="status-info" style="font-size:12px;line-height:1.5;">
+      <strong>Open the Pairings tab in NavBlue</strong><br>
+      Pairings will load automatically once NavBlue fetches them.<br>
+      Then click Retry below.
+      <br><br>
+      <button id="btn-retry-pairings" class="btn-secondary" style="font-size:11px;">🔄 Retry</button>
     </div>`;
   } catch (e) {
     countEl.textContent = '!';
-    listEl.innerHTML = `<div class="status-error" style="font-size:11px;">
-      ${escHtml(e.message)}<br>
-      <button id="btn-retry-pairings" class="btn-secondary" style="margin-top:6px;font-size:11px;">🔄 Retry</button>
+    listEl.innerHTML = `<div class="status-info" style="font-size:12px;line-height:1.5;">
+      <strong>Open the Pairings tab in NavBlue</strong><br>
+      Pairings will load automatically once NavBlue fetches them.<br>
+      Then click Retry below.
+      <br><br>
+      <button id="btn-retry-pairings" class="btn-secondary" style="font-size:11px;">🔄 Retry</button>
     </div>`;
   }
   document.getElementById('btn-retry-pairings')?.addEventListener('click', () => loadPairings(period));

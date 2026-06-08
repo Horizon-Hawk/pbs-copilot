@@ -230,7 +230,7 @@ label:first-child { margin-top: 0; }
 }
 
 /* ── Status messages ─────────────────────────────────────────────────────── */
-.status-loading, .status-success, .status-error {
+.status-loading, .status-success, .status-error, .status-info {
   margin-top: 8px;
   padding: 6px 10px;
   border-radius: 6px;
@@ -239,6 +239,7 @@ label:first-child { margin-top: 0; }
 .status-loading { background: #1e3a5f; color: #93c5fd; }
 .status-success { background: #064e3b; color: #6ee7b7; }
 .status-error   { background: #450a0a; color: #fca5a5; }
+.status-info    { background: #1c1a2e; color: #c4b5fd; border: 1px solid #4c1d95; }
 
 /* ── Constants summary ───────────────────────────────────────────────────── */
 .summary-item {

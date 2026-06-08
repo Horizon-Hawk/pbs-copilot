@@ -39,6 +39,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Forward intercepted pairings data from content script to sidebar
   if (message.type === 'NAVBLUE_PAIRINGS_CAPTURED') {
+    // Persist so sidebar can read it on open even if the broadcast was missed
+    chrome.storage.local.set({ cachedPairingsXml: message.data, cachedPairingsUrl: message.url });
     chrome.runtime.sendMessage({ type: 'NAVBLUE_PAIRINGS_CAPTURED', data: message.data, url: message.url }).catch(() => {});
     return false;
   }

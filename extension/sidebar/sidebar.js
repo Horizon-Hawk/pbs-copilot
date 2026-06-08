@@ -208,23 +208,23 @@ function showPairingsPrompt(listEl, countEl, period) {
     try {
       await chrome.scripting.executeScript({
         target: { tabId },
+        world: 'MAIN',
         func: () => {
+          const ng = window.angular;
+
           function extractAndPost() {
+            if (!ng) return false;
             try {
-              const ng = window.angular;
-              if (!ng) return false;
               const allEls = document.querySelectorAll('[ng-controller],[data-ng-controller]');
               for (const el of allEls) {
                 try {
                   let scope = ng.element(el).scope();
-                  // Walk up to $rootScope to search broadly
                   const checked = new Set();
                   while (scope && !checked.has(scope.$id)) {
                     checked.add(scope.$id);
                     for (const key of Object.keys(scope)) {
                       if (key.startsWith('$')) continue;
                       const v = scope[key];
-                      // PairingData wrapper: has .arrPairings with strPairingNumber
                       const arr = (v && !Array.isArray(v) && Array.isArray(v.arrPairings)) ? v.arrPairings
                                 : (Array.isArray(v) ? v : null);
                       if (arr && arr.length > 0 && arr[0] && arr[0].strPairingNumber) {

@@ -156,18 +156,19 @@ async function loadPairings(period) {
   try {
     const res = await chrome.runtime.sendMessage({ type: 'GET_PAIRINGS_FROM_ANGULAR' });
     if (res?.ok && res.raw?.length) {
-      // Normalize Angular objects to our pairing schema
+      // Normalize NavBlue str-prefixed Angular objects
       rawPairings = res.raw.map(p => ({
-        number:   p.Number   || p.number   || p.PairingNumber || '',
-        length:   p.Length   || p.length   || p.Days          || '',
-        checkin:  p.CheckIn  || p.checkIn  || p.checkin       || '',
-        checkout: p.CheckOut || p.checkOut || p.checkout      || '',
-        credit:   p.Credit   || p.credit   || '',
-        tafb:     p.Tafb     || p.tafb     || p.TAFB          || '',
-        layovers: (p.LayoverLocationNames || p.layoverLocationNames || p.Layovers || '')
-                    ?.split(',').filter(Boolean) || [],
-        dates:    p.Dates    || p.dates    || '',
-        detail:   p.DetailReport || p.detailReport || ''
+        number:   p.strPairingNumber || '',
+        length:   p.strLength || p.strLengthValue || '',
+        checkin:  p.strCheckinTime || '',
+        checkout: p.strCheckoutTime || '',
+        credit:   p.strCredit || '',
+        tafb:     p.strTafb || '',
+        layovers: Array.isArray(p.arrLayoverNames)
+          ? p.arrLayoverNames
+          : (p.strLayoverNames || '').split(',').filter(Boolean),
+        dates:    p.strPairingDates || '',
+        detail:   p.strPairingReport || ''
       })).filter(p => p.number);
       countEl.textContent = rawPairings.length;
       if (rawPairings.length) { renderPairings(); return; }
@@ -738,22 +739,22 @@ function parsePairingsXml(xml) {
 
 function parsePairingsJson(jsonText) {
   let data = JSON.parse(jsonText);
-  // Unwrap common envelope shapes: { pairings: [...] }, { data: [...] }, { Pairings: [...] }
+  // Unwrap envelope: PairingData object has arrPairings, or direct array
   if (!Array.isArray(data)) {
-    data = data.pairings || data.Pairings || data.data || data.Data || data.items || data.Items || [];
+    data = data.arrPairings || data.pairings || data.data || [];
   }
-  const g = (o, ...keys) => { for (const k of keys) { if (o[k] != null) return String(o[k]); } return ''; };
-  return data.filter(p => g(p,'Number','PairingNumber','number','pairingNumber')).map(p => ({
-    number:   g(p, 'Number', 'PairingNumber', 'number', 'pairingNumber'),
-    length:   g(p, 'Length', 'Days', 'length', 'days'),
-    checkin:  g(p, 'CheckIn', 'checkIn', 'checkin', 'CheckInTime', 'checkInTime'),
-    checkout: g(p, 'CheckOut', 'checkOut', 'checkout', 'CheckOutTime', 'checkOutTime'),
-    credit:   g(p, 'Credit', 'CreditTime', 'credit', 'creditTime'),
-    tafb:     g(p, 'Tafb', 'TAFB', 'tafb', 'TimeAwayFromBase', 'timeAwayFromBase'),
-    layovers: (g(p, 'LayoverLocationNames', 'layoverLocationNames', 'Layovers', 'layovers') || '')
-                .split(',').filter(Boolean),
-    dates:    g(p, 'Dates', 'dates', 'FlyDates', 'flyDates'),
-    detail:   g(p, 'DetailReport', 'detailReport', 'detail', '')
+  return data.filter(p => p.strPairingNumber).map(p => ({
+    number:   p.strPairingNumber,
+    length:   p.strLength || p.strLengthValue || '',
+    checkin:  p.strCheckinTime || '',
+    checkout: p.strCheckoutTime || '',
+    credit:   p.strCredit || '',
+    tafb:     p.strTafb || '',
+    layovers: Array.isArray(p.arrLayoverNames)
+      ? p.arrLayoverNames
+      : (p.strLayoverNames || '').split(',').filter(Boolean),
+    dates:    p.strPairingDates || '',
+    detail:   p.strPairingReport || ''
   }));
 }
 

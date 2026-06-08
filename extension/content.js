@@ -118,10 +118,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const scope = ng.element(el).scope();
           if (!scope) continue;
 
-          // Try common property names NavBlue might use
-          for (const key of ['pairings', 'allPairings', 'pairingList', 'pairingData', 'bidPairings', 'filteredPairings', 'availablePairings']) {
-            if (Array.isArray(scope[key]) && scope[key].length > 0) {
-              pairingData = scope[key];
+          // NavBlue uses PairingData object (has .arrPairings) or direct arrays
+          const PAIRING_KEYS = ['arrPairings', 'pairings', 'allPairings', 'pairingList', 'pairingData', 'bidPairings', 'filteredPairings', 'availablePairings'];
+          for (const key of PAIRING_KEYS) {
+            let candidate = scope[key];
+            // PairingData wrapper object — unwrap .arrPairings
+            if (candidate && !Array.isArray(candidate) && Array.isArray(candidate.arrPairings)) {
+              candidate = candidate.arrPairings;
+            }
+            if (Array.isArray(candidate) && candidate.length > 0 && candidate[0].strPairingNumber) {
+              pairingData = candidate;
               console.log('[PBS] Found pairings in scope.' + key, 'on', el.getAttribute('ng-controller') || el.getAttribute('data-ng-controller'), 'count:', pairingData.length);
               break;
             }
@@ -131,9 +137,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // Also check one level deeper via $parent
           const parent = scope.$parent;
           if (parent) {
-            for (const key of ['pairings', 'allPairings', 'pairingList', 'pairingData', 'bidPairings', 'filteredPairings', 'availablePairings']) {
-              if (Array.isArray(parent[key]) && parent[key].length > 0) {
-                pairingData = parent[key];
+            for (const key of PAIRING_KEYS) {
+              let candidate = parent[key];
+              if (candidate && !Array.isArray(candidate) && Array.isArray(candidate.arrPairings)) {
+                candidate = candidate.arrPairings;
+              }
+              if (Array.isArray(candidate) && candidate.length > 0 && candidate[0].strPairingNumber) {
+                pairingData = candidate;
                 console.log('[PBS] Found pairings in scope.$parent.' + key, 'count:', pairingData.length);
                 break;
               }

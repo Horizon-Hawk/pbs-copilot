@@ -14,10 +14,8 @@
       window.postMessage({ type: '__PBS_PAIRINGS__', url, data: text, format: 'xml' }, '*');
       return;
     }
-    // JSON pairings — look for array with pairing-like keys
-    if ((text.startsWith('[') || text.startsWith('{')) &&
-        (text.includes('"Number"') || text.includes('"PairingNumber"') || text.includes('"number"')) &&
-        (text.includes('"CheckIn"') || text.includes('"checkIn"') || text.includes('"Credit"') || text.includes('"credit"'))) {
+    // JSON pairings — NavBlue uses str-prefixed keys (strPairingNumber, strCheckinTime, etc.)
+    if (text.includes('"strPairingNumber"')) {
       window.postMessage({ type: '__PBS_PAIRINGS__', url, data: text, format: 'json' }, '*');
     }
   }

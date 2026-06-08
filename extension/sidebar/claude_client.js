@@ -200,6 +200,7 @@ function selectCreditTargetPairings(pairings, remainingHours, mode = 'credit') {
     cherry_picks: selected.map(p => p.number),
     total_credit: `${h}:${m}`,
     trip_count: selected.length,
+    days_worked: selected.reduce((sum, p) => sum + (parseInt(p.length) || 0), 0),
     remaining_hours: remainingHours
   };
 }
@@ -264,7 +265,9 @@ export async function buildBidFromPreferences({ preferences, pairings, absences,
   const text = data.content[0].text.trim();
 
   const json = text.replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-  return JSON.parse(json);
+  const model = JSON.parse(json);
+  model._meta = { creditContext, selectionMode };
+  return model;
 }
 
 // Score each available pairing against the bid model for display

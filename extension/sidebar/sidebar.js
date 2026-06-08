@@ -498,6 +498,14 @@ function buildModelFromConstants() {
   };
 }
 
+function getPeriodDays(period) {
+  if (!period) return null;
+  const MONTHS = { JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11 };
+  const m = period.match(/^([A-Z]{3})(\d{2})$/);
+  if (!m || MONTHS[m[1]] === undefined) return null;
+  return new Date(2000 + parseInt(m[2]), MONTHS[m[1]] + 1, 0).getDate();
+}
+
 function expandDateRange(start, end) {
   const norm = d => {
     if (!d) return null;
@@ -553,10 +561,22 @@ async function buildBid() {
       }));
     }
 
+    const meta = model._meta;
+    delete model._meta;
+
     bidModel = model;
-    renderPairings(); // re-score with new model
+    renderPairings();
     renderBidPreview(model);
-    showStatus('chat-status', 'success', `Bid built — ${model.bid_groups?.length || 0} group(s)`);
+
+    let statusMsg = `Bid built — ${model.bid_groups?.length || 0} group(s)`;
+    if (meta?.creditContext) {
+      const { total_credit, trip_count, days_worked } = meta.creditContext;
+      const periodDays = getPeriodDays(session?.period);
+      const daysOff = (periodDays && days_worked) ? periodDays - days_worked : null;
+      statusMsg = `${trip_count} trip${trip_count !== 1 ? 's' : ''} · ${total_credit}h credit`;
+      if (daysOff !== null) statusMsg += ` · ${daysOff} days off`;
+    }
+    showStatus('chat-status', 'success', statusMsg);
   } catch (e) {
     showStatus('chat-status', 'error', e.message);
   } finally {

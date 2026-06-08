@@ -128,7 +128,7 @@ export class NavblueClient {
     }
 
     const body = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n${bidSets}`;
-    console.log('[PBS] POST body (first 2000):', body.slice(0, 2000));
+    console.log('[PBS] POST body (full):', body);
 
     return this._fetch(
       { FileType: 'bidset', function: 'set', period },

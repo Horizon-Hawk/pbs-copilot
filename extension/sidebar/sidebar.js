@@ -35,7 +35,9 @@ async function loadStorage() {
     min_between: 48,
     avoid_stations: [],
     prefer_weekends: true,
-    max_days_on: 5
+    max_days_on: 6,
+    min_credit: 75,
+    max_credit: 90
   };
   groups = data.groups || [];
 
@@ -58,7 +60,9 @@ async function saveConstants() {
     avoid_stations: document.getElementById('const-avoid-stations').value
       .split(',').map(s => s.trim().toUpperCase()).filter(Boolean),
     prefer_weekends: document.getElementById('const-prefer-weekends').checked,
-    max_days_on: parseInt(document.getElementById('const-max-days-on').value) || 5
+    max_days_on: parseInt(document.getElementById('const-max-days-on').value) || 6,
+    min_credit: parseInt(document.getElementById('const-min-credit').value) || 75,
+    max_credit: parseInt(document.getElementById('const-max-credit').value) || 90
   };
   await chrome.storage.local.set({ constants });
   renderConstantsSummary();
@@ -99,15 +103,81 @@ async function loadPersonData(period) {
 }
 
 async function loadPairings(period) {
+  const countEl = document.getElementById('pairings-count');
+  const listEl  = document.getElementById('pairings-list');
+  countEl.textContent = '…';
+
+  // First try: interceptor cache (populated when user navigates to pairings in NavBlue)
+  try {
+    const cached = await chrome.storage.local.get('cachedPairingsXml');
+    if (cached.cachedPairingsXml) {
+      const parsed = parsePairingsXml(cached.cachedPairingsXml);
+      if (parsed.length) {
+        rawPairings = parsed;
+        countEl.textContent = rawPairings.length;
+        renderPairings();
+        console.log('[PBS] Loaded', rawPairings.length, 'pairings from storage cache');
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('[PBS] Cache read failed:', e.message);
+  }
+
+  // Second try: NavBlue API
   try {
     const xml = await navblue.getPairings(period);
     rawPairings = navblue.parsePairings(xml);
-    document.getElementById('pairings-count').textContent = rawPairings.length;
-    renderPairings();
+    if (rawPairings.length) {
+      countEl.textContent = rawPairings.length;
+      renderPairings();
+      return;
+    }
   } catch (e) {
-    console.error('Pairings load failed:', e);
-    document.getElementById('pairings-count').textContent = '—';
+    console.warn('[PBS] API pairings failed, trying Angular extraction:', e.message);
   }
+
+  // Second try: extract from AngularJS app memory
+  countEl.textContent = '…';
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'GET_PAIRINGS_FROM_ANGULAR' });
+    if (res?.ok && res.raw?.length) {
+      // Normalize Angular objects to our pairing schema
+      rawPairings = res.raw.map(p => ({
+        number:   p.Number   || p.number   || p.PairingNumber || '',
+        length:   p.Length   || p.length   || p.Days          || '',
+        checkin:  p.CheckIn  || p.checkIn  || p.checkin       || '',
+        checkout: p.CheckOut || p.checkOut || p.checkout      || '',
+        credit:   p.Credit   || p.credit   || '',
+        tafb:     p.Tafb     || p.tafb     || p.TAFB          || '',
+        layovers: (p.LayoverLocationNames || p.layoverLocationNames || p.Layovers || '')
+                    ?.split(',').filter(Boolean) || [],
+        dates:    p.Dates    || p.dates    || '',
+        detail:   p.DetailReport || p.detailReport || ''
+      })).filter(p => p.number);
+      countEl.textContent = rawPairings.length;
+      if (rawPairings.length) { renderPairings(); return; }
+    }
+    // If no pairings found, show scope keys so we can debug
+    const info = res?.scopeKeys ? JSON.stringify(res.scopeKeys, null, 2) : (res?.error || 'unknown');
+    console.warn('[PBS] Angular extraction result:', info);
+    countEl.textContent = '!';
+    listEl.innerHTML = `<div class="status-error" style="word-break:break-all;font-size:11px;">
+      API returned 400. Angular scope keys:<br><pre style="font-size:10px;overflow:auto;max-height:120px">${escHtml(info)}</pre>
+      <button id="btn-retry-pairings" class="btn-secondary" style="margin-top:6px;font-size:11px;">🔄 Retry</button>
+    </div>`;
+  } catch (e) {
+    countEl.textContent = '!';
+    listEl.innerHTML = `<div class="status-error" style="font-size:11px;">
+      ${escHtml(e.message)}<br>
+      <button id="btn-retry-pairings" class="btn-secondary" style="margin-top:6px;font-size:11px;">🔄 Retry</button>
+    </div>`;
+  }
+  document.getElementById('btn-retry-pairings')?.addEventListener('click', () => loadPairings(period));
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // ── Pairings ──────────────────────────────────────────────────────────────────
@@ -152,6 +222,10 @@ function renderConstantsSummary() {
     items.push('Prefer weekends off');
   if (constants.max_days_on)
     items.push(`Max ${constants.max_days_on} days on`);
+  if (constants.min_credit)
+    items.push(`Min credit ${constants.min_credit}h`);
+  if (constants.max_credit)
+    items.push(`Max credit ${constants.max_credit}h`);
 
   list.innerHTML = items.length
     ? items.map(i => `<div class="summary-item">${i}</div>`).join('')
@@ -241,6 +315,12 @@ function buildModelFromConstants() {
   }
   if (constants.max_days_on) {
     line_conditions.push({ type: 'MaximumDaysOn', days: constants.max_days_on });
+  }
+  if (constants.min_credit) {
+    line_conditions.push({ type: 'MinimumCreditWindow', hours: constants.min_credit });
+  }
+  if (constants.max_credit) {
+    line_conditions.push({ type: 'MaximumCreditWindow', hours: constants.max_credit });
   }
   if (constants.prefer_weekends) {
     prefer_off.push('Weekends');
@@ -394,9 +474,11 @@ async function submitBid() {
 
     showStatus('submit-status', 'loading', 'Submitting bid to NavBlue...');
 
+    const targetEl = document.querySelector('input[name="bid-target"]:checked');
+    const target = targetEl?.value || 'current';
     const xml = buildBidXml(bidModel);
-    console.log('[PBS] Submitting BidLines XML:', xml);
-    await navblue.submitBid(period, xml);
+    console.log('[PBS] Submitting BidLines XML (target:', target, '):', xml);
+    await navblue.submitBid(period, xml, target);
 
     // Only consume the token after NavBlue confirms success
     await fetch(`${endpoint}/api/consume`, {
@@ -443,7 +525,9 @@ function bindEvents() {
     document.getElementById('const-min-between').value = constants.min_between ?? 48;
     document.getElementById('const-avoid-stations').value = (constants.avoid_stations || []).join(', ');
     document.getElementById('const-prefer-weekends').checked = constants.prefer_weekends !== false;
-    document.getElementById('const-max-days-on').value = constants.max_days_on ?? 5;
+    document.getElementById('const-max-days-on').value = constants.max_days_on ?? 6;
+    document.getElementById('const-min-credit').value = constants.min_credit ?? 75;
+    document.getElementById('const-max-credit').value = constants.max_credit ?? 90;
     document.getElementById('panel-constants').classList.remove('hidden');
   });
   document.getElementById('btn-close-constants').addEventListener('click', () =>
@@ -465,6 +549,19 @@ function bindEvents() {
   // Submit bid
   document.getElementById('btn-submit').addEventListener('click', submitBid);
 
+  document.getElementById('btn-copy-data').addEventListener('click', () => {
+    const data = JSON.stringify({
+      period: session?.period,
+      pairings: rawPairings,
+      absences: session?.absences || [],
+      personXmlSnippet: session?.personXml?.slice(0, 2000) || null
+    });
+    navigator.clipboard.writeText(data).then(() => {
+      document.getElementById('btn-copy-data').textContent = '✓ Copied!';
+      setTimeout(() => document.getElementById('btn-copy-data').textContent = '📋 Copy pairing data', 2000);
+    });
+  });
+
   // Round-trip debug
   document.getElementById('btn-roundtrip').addEventListener('click', async () => {
     const period = (session?.period || document.getElementById('period-input').value.trim()).toUpperCase();
@@ -475,6 +572,38 @@ function bindEvents() {
       showStatus('submit-status', 'success', 'Round-trip OK — BidSets structure is accepted');
     } catch (e) {
       showStatus('submit-status', 'error', `Round-trip failed: ${e.message}`);
+    }
+  });
+
+  // Manual period load
+  document.getElementById('btn-load-period').addEventListener('click', () => {
+    const period = document.getElementById('period-pairings').value.trim().toUpperCase();
+    if (!period) return;
+    if (session) session.period = period;
+    document.getElementById('header-meta').textContent =
+      session ? `${session.alc?.toUpperCase() || ''} · ${period}` : period;
+    loadPairings(period);
+    loadPersonData(period);
+  });
+
+  // Pairings paste fallback
+  document.getElementById('btn-load-pasted').addEventListener('click', () => {
+    const xml = document.getElementById('pairings-paste').value.trim();
+    if (!xml) return;
+    try {
+      const parsed = navblue ? navblue.parsePairings(xml) : parsePairingsXml(xml);
+      if (!parsed.length) {
+        document.getElementById('pairings-list').innerHTML =
+          '<div class="status-error">Parsed 0 pairings — check the XML format</div>';
+        return;
+      }
+      rawPairings = parsed;
+      document.getElementById('pairings-count').textContent = rawPairings.length;
+      document.getElementById('pairings-paste').value = '';
+      renderPairings();
+    } catch (e) {
+      document.getElementById('pairings-list').innerHTML =
+        `<div class="status-error">Parse error: ${escHtml(e.message)}</div>`;
     }
   });
 
@@ -492,6 +621,23 @@ function bindEvents() {
 
   // Messages from background (session data) — only re-init if token changed
   chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'NAVBLUE_PAIRINGS_CAPTURED') {
+      console.log('[PBS] Pairings captured by interceptor from', message.url, 'size:', message.data?.length);
+      try {
+        const parsed = parsePairingsXml(message.data);
+        if (parsed.length) {
+          rawPairings = parsed;
+          document.getElementById('pairings-count').textContent = rawPairings.length;
+          renderPairings();
+          // Cache so loadPairings() can use it on next sidebar open
+          await chrome.storage.local.set({ cachedPairingsXml: message.data, cachedPairingsUrl: message.url });
+          console.log('[PBS] Loaded', rawPairings.length, 'pairings from interceptor, cached to storage');
+        }
+      } catch (e) {
+        console.warn('[PBS] Failed to parse intercepted pairings:', e.message);
+      }
+    }
+
     if (message.type === 'NAVBLUE_DATA') {
       const incoming = message.data;
       if (!session || incoming.token !== session.token) {
@@ -500,12 +646,30 @@ function bindEvents() {
         session.period = incoming.period;
         document.getElementById('header-meta').textContent =
           `${incoming.alc.toUpperCase()} · ${incoming.period}`;
+        loadPairings(incoming.period);
+        loadPersonData(incoming.period);
       }
     }
   });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function parsePairingsXml(xml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'text/xml');
+  return [...doc.querySelectorAll('Pairing')].map(p => ({
+    number: p.getAttribute('Number'),
+    length: p.getAttribute('Length'),
+    checkin: p.getAttribute('CheckIn'),
+    checkout: p.getAttribute('CheckOut'),
+    credit: p.getAttribute('Credit'),
+    tafb: p.getAttribute('Tafb'),
+    layovers: p.getAttribute('LayoverLocationNames')?.split(',').filter(Boolean) || [],
+    dates: p.getAttribute('Dates'),
+    detail: p.getAttribute('DetailReport') || ''
+  }));
+}
+
 function showStatus(elementId, type, text) {
   const el = document.getElementById(elementId);
   el.textContent = text;

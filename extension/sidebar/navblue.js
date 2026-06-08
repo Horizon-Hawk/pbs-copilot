@@ -16,6 +16,7 @@ export class NavblueClient {
 
   async _fetch(urlParams, method = 'GET', body = null, contentType = null) {
     const url = this._url(urlParams);
+    console.log('[PBS] _fetch →', method, url.replace(/alc=[^&]+/, 'alc=REDACTED').replace(/customModifiedTime=[^&]+/, 'ts=…'));
     const res = await chrome.runtime.sendMessage({
       type: 'NAVBLUE_FETCH', url, method, body, contentType
     });
@@ -36,7 +37,18 @@ export class NavblueClient {
   }
 
   async getPairings(period) {
-    return this._fetch({ FileType: 'pairings', function: 'get', period });
+    // Try known FileType values until one works
+    for (const ft of ['pairings', 'sched', 'schedule', 'pairing']) {
+      try {
+        console.log('[PBS] Trying FileType:', ft);
+        const xml = await this._fetch({ FileType: ft, function: 'get', period });
+        console.log('[PBS] FileType', ft, 'succeeded, length:', xml?.length);
+        return xml;
+      } catch (e) {
+        console.warn('[PBS] FileType', ft, 'failed:', e.message);
+      }
+    }
+    throw new Error('All FileType values failed for pairings — check Network tab in NavBlue for the correct FileType');
   }
 
   async getMasterData() {
@@ -60,10 +72,10 @@ export class NavblueClient {
     return tag;
   }
 
-  async submitBid(period, bidLinesXml) {
+  // target: 'current' (default, bid window must be open) | 'default' (always editable)
+  async submitBid(period, bidLinesXml, target = 'current') {
     const personXml = await this.getPersonData(period);
 
-    // Extract DataVersion for logging
     const dvMatch = personXml.match(/DataVersion="([^"]*)"/) ||
                     personXml.match(/DataVersion='([^']*)'/);
     if (!dvMatch) throw new Error('DataVersion not found in person data');
@@ -71,46 +83,41 @@ export class NavblueClient {
     const cnMatch = personXml.match(/CategoryName="([^"]*)"/) ||
                     personXml.match(/CategoryName='([^']*)'/);
     const categoryName = cnMatch ? cnMatch[1] : '';
-    console.log('[PBS] DataVersion:', dataVersion, 'Category:', categoryName);
+    console.log('[PBS] DataVersion:', dataVersion, 'Category:', categoryName, 'Target:', target);
 
-    // Extract BidSets block verbatim, then clean read-only attributes
     const bidSetsMatch = personXml.match(/<BidSets[\s\S]*?<\/BidSets>/);
     if (!bidSetsMatch) throw new Error('BidSets not found in person data');
     let bidSets = bidSetsMatch[0];
 
-    // Clean the opening tag
     bidSets = bidSets.replace(/^<BidSets[^>]*>/, tag => {
       if (!tag.includes('xmlns')) tag = tag.replace('<BidSets', '<BidSets xmlns="http://tempuri.org"');
       return this._cleanBidSetsTag(tag);
     });
 
-    // Extract our new BidLines content
     const innerMatch = bidLinesXml.match(/<BidLines>([\s\S]*?)<\/BidLines>/);
     const innerBidLines = innerMatch ? innerMatch[1] : '';
-    const newCurrentBid = `<CurrentBid><BidLines>${innerBidLines}</BidLines><Buddy/></CurrentBid>`;
 
-    // Replace or inject CurrentBid
-    const ciStart = bidSets.indexOf('<CurrentBid>');
+    const openTag  = target === 'default' ? '<DefaultBid>' : '<CurrentBid>';
+    const closeTag = target === 'default' ? '</DefaultBid>' : '</CurrentBid>';
+    const newBid   = `${openTag}<BidLines>${innerBidLines}</BidLines><Buddy/>${closeTag}`;
+
+    const ciStart = bidSets.indexOf(openTag);
     if (ciStart >= 0) {
-      const ciEnd = bidSets.indexOf('</CurrentBid>') + '</CurrentBid>'.length;
+      const ciEnd = bidSets.indexOf(closeTag) + closeTag.length;
       const existing = bidSets.slice(ciStart, ciEnd);
-      console.log('[PBS] Existing CurrentBid (first 1000):', existing.slice(0, 1000));
-
-      // Only swap out <BidLines> — preserve Buddy and any other elements NavBlue may require
+      console.log(`[PBS] Existing ${target === 'default' ? 'DefaultBid' : 'CurrentBid'} (first 1000):`, existing.slice(0, 1000));
       const blStart = existing.indexOf('<BidLines>');
-      const blEnd = existing.indexOf('</BidLines>') + '</BidLines>'.length;
+      const blEnd   = existing.indexOf('</BidLines>') + '</BidLines>'.length;
       const replaced = blStart >= 0
         ? existing.slice(0, blStart) + `<BidLines>${innerBidLines}</BidLines>` + existing.slice(blEnd)
-        : `<CurrentBid><BidLines>${innerBidLines}</BidLines><Buddy/></CurrentBid>`;
+        : newBid;
       bidSets = bidSets.slice(0, ciStart) + replaced + bidSets.slice(ciEnd);
-      const nc = bidSets.indexOf('<CurrentBid>');
-      const ne = bidSets.indexOf('</CurrentBid>') + '</CurrentBid>'.length;
-      console.log('[PBS] New CurrentBid (first 3000):', bidSets.slice(nc, ne).slice(0, 3000));
     } else {
-      // No CurrentBid in personXml — inject before DefaultBid (or before </BidSet>)
-      const dbStart = bidSets.indexOf('<DefaultBid>');
-      const insertAt = dbStart >= 0 ? dbStart : bidSets.indexOf('</BidSet>');
-      bidSets = bidSets.slice(0, insertAt) + newCurrentBid + bidSets.slice(insertAt);
+      // Tag doesn't exist yet — inject CurrentBid before DefaultBid, or DefaultBid before </BidSet>
+      const anchor = target === 'default'
+        ? bidSets.indexOf('</BidSet>')
+        : (bidSets.indexOf('<DefaultBid>') >= 0 ? bidSets.indexOf('<DefaultBid>') : bidSets.indexOf('</BidSet>'));
+      bidSets = bidSets.slice(0, anchor) + newBid + bidSets.slice(anchor);
     }
 
     const body = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n${bidSets}`;

@@ -24,7 +24,14 @@
     {
       "matches": ["*://*.pbs.vmc.navblue.cloud/*"],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["interceptor.js"],
+      "matches": ["*://*.pbs.vmc.navblue.cloud/*"]
     }
   ],
 

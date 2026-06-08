@@ -22,6 +22,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  // Forward intercepted pairings data from content script to sidebar
+  if (message.type === 'NAVBLUE_PAIRINGS_CAPTURED') {
+    chrome.runtime.sendMessage({ type: 'NAVBLUE_PAIRINGS_CAPTURED', data: message.data, url: message.url }).catch(() => {});
+    return false;
+  }
+
+  // Relay Angular scope extraction request to NavBlue tab
+  if (message.type === 'GET_PAIRINGS_FROM_ANGULAR') {
+    chrome.tabs.query({ url: '*://*.pbs.vmc.navblue.cloud/*' }, (tabs) => {
+      if (!tabs.length) { sendResponse({ ok: false, error: 'NavBlue tab not found' }); return; }
+      chrome.tabs.sendMessage(tabs[0].id, message, (response) => {
+        sendResponse(response || { ok: false, error: 'No response' });
+      });
+    });
+    return true;
+  }
+
   // Proxy NavBlue API calls through the NavBlue tab content script (same-origin)
   if (message.type === 'NAVBLUE_FETCH') {
     chrome.tabs.query({ url: '*://*.pbs.vmc.navblue.cloud/*' }, (tabs) => {

@@ -1,30 +1,40 @@
 // Converts the internal bid model into NavBlue XML
-
-// --- Internal bid model schema ---
 //
-// constants: {
-//   avoid_employees: ["12345"],
-//   avoid_pairings: [{ type, ...params }],
-//   prefer_off: ["Weekends"] | [{ dates: [...] }] | [{ days_of_week: [...] }],
-//   line_conditions: [{ type, ...params }]
+// Model schema:
+// {
+//   constants: {
+//     avoid_employees: ["12345"],
+//     avoid_pairings: [{ type, ...params }],
+//     prefer_off: [
+//       'Weekends' |
+//       { dates: ['2026-07-04', ...] } |
+//       { dateRange: { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' } } |
+//       { daysOfWeek: ['Saturday', 'Sunday'] }
+//       // append esn: true to any object form to add ElseStartNextBidGroup
+//     ],
+//     line_conditions: [{ type, ...params }]
+//   },
+//   bid_groups: [{
+//     name: string,
+//     waives: ['MinimumDaysOffTo2', '1DayOffIn7', ...],  // Waive lines, placed at top per PBS manual
+//     avoid_pairings: [{ type, ...params }],
+//     award_pairings: [{ type, ...params }],             // preference-based, ordered
+//     specific_pairings: ['G3027', 'G3043'],             // cherry-picked pairing numbers
+//     cssn: boolean                                      // ClearScheduleAndStartNext before catch-all
+//   }],
+//   reserve: {
+//     prefer_off: ['Weekends']
+//   }
 // }
 //
-// bid_groups: [{
-//   name: string,
-//   avoid_pairings: [{ type, ...params }],
-//   award_pairings: [{ type, ...params }],   // ordered by preference
-//   specific_pairings: ["G3027", "G3043"]    // cherry-picked numbers
-// }]
-//
-// reserve: {
-//   prefer_off: ["Weekends"]
-// }
+// Group build order per PBS manual:
+//   StartBidGroup → Waives → LineConditions → PreferOff → AvoidPairings → AwardPairings → CSSN → SysGen catch-all
 
 export function buildBidXml(model) {
   const lines = [];
   let lineNum = 1;
 
-  // AvoidPairings / AwardPairings: content element comes BEFORE BidLineNumber/BidLineType
+  // AvoidPairings / AwardPairings: content element before BidLineNumber/BidLineType
   const lineContentFirst = (type, innerXml, sysGen = false) => {
     const num = lineNum++;
     const tail = sysGen ? '<SysGen></SysGen>' : '<Editable></Editable>';
@@ -36,8 +46,8 @@ export function buildBidXml(model) {
     </BidLine>`;
   };
 
-  // StartBidGroup / PreferOff / LineCondition / Else:
-  // Order: BidLineNumber, BidLineType, Editable, ShowAnalyzeDetails (optional), then content
+  // StartBidGroup / PreferOff / LineCondition / Waive / Instruction:
+  // BidLineNumber first, then BidLineType, Editable, optional ShowAnalyzeDetails, then content
   const lineNumberFirst = (type, innerXml, extra = '') => {
     const num = lineNum++;
     return `    <BidLine>
@@ -48,7 +58,7 @@ export function buildBidXml(model) {
     </BidLine>`;
   };
 
-  // SysGen StartBidGroup: Number, Type, ShowAnalyzeDetails, content, SysGen (no Editable)
+  // SysGen StartBidGroup (no Editable)
   const lineNumberFirstSysGen = (groupType, startTagInner) => {
     const num = lineNum++;
     return `    <BidLine>
@@ -64,6 +74,7 @@ export function buildBidXml(model) {
   };
 
   for (const group of model.bid_groups) {
+    // 1. StartBidGroup
     lines.push(lineNumberFirst('StartBidGroup',
       `<StartBidGroup>
         <BidGroupType>StartPairings</BidGroupType>
@@ -72,48 +83,61 @@ export function buildBidXml(model) {
       '<ShowAnalyzeDetails>false</ShowAnalyzeDetails>'
     ));
 
-    // Constants: avoid employees
-    for (const empId of (model.constants?.avoid_employees || [])) {
-      lines.push(lineContentFirst('AvoidPairings', buildAvoidEmployee(empId)));
+    // 2. Waive lines — must be at top of group per PBS manual
+    for (const waiveType of (group.waives || [])) {
+      lines.push(lineNumberFirst('Waive',
+        `<Waive>
+          <WaiveType>${waiveType}</WaiveType>
+          <${waiveType}></${waiveType}>
+        </Waive>`
+      ));
     }
 
-    // Constants: avoid pairings (PairingCheckin, LandingsIn, etc.)
-    for (const rule of (model.constants?.avoid_pairings || [])) {
-      const xml = buildPairingProperty('AvoidPairings', rule);
-      if (xml) lines.push(lineContentFirst('AvoidPairings', xml));
+    // 3. Set conditions (LineConditions) — min/max credit, days-on, time-between, etc.
+    for (const cond of (model.constants?.line_conditions || [])) {
+      const xml = buildLineCondition(cond);
+      if (xml) lines.push(lineNumberFirst('LineCondition', xml));
     }
 
-    // Constants: prefer off
+    // 4. PreferOff (constants apply to every group)
     for (const pref of (model.constants?.prefer_off || [])) {
       const xml = buildPreferOff(pref);
       if (xml) lines.push(lineNumberFirst('PreferOff', xml));
     }
 
-    // Constants: line conditions — skip MaximumDaysOn (unconfirmed structure)
-    for (const cond of (model.constants?.line_conditions || [])) {
-      if (cond.type === 'MaximumDaysOn') continue;
-      const xml = buildLineCondition(cond);
-      if (xml) lines.push(lineNumberFirst('LineCondition', xml));
+    // 5. AvoidPairings — employees first, then property-based
+    for (const empId of (model.constants?.avoid_employees || [])) {
+      lines.push(lineContentFirst('AvoidPairings', buildAvoidEmployee(empId)));
     }
-
-    // Group-specific avoid pairings
+    for (const rule of (model.constants?.avoid_pairings || [])) {
+      const xml = buildPairingProperty('AvoidPairings', rule);
+      if (xml) lines.push(lineContentFirst('AvoidPairings', xml));
+    }
     for (const rule of (group.avoid_pairings || [])) {
       const xml = buildPairingProperty('AvoidPairings', rule);
       if (xml) lines.push(lineContentFirst('AvoidPairings', xml));
     }
 
-    // Cherry-picked specific pairings
+    // 6. AwardPairings — cherry-picks first, then property-based preference
     if (group.specific_pairings?.length) {
       lines.push(lineContentFirst('AwardPairings', buildSpecificPairings(group.specific_pairings)));
     }
-
-    // Preference-based award pairings
     for (const rule of (group.award_pairings || [])) {
       const xml = buildPairingProperty('AwardPairings', rule);
       if (xml) lines.push(lineContentFirst('AwardPairings', xml));
     }
 
-    // Catch-all SysGen award — required at end of every group
+    // 7. CSSN instruction — ClearScheduleAndStartNext; placed before catch-all per PBS manual
+    if (group.cssn) {
+      lines.push(lineNumberFirst('Instruction',
+        `<Instruction>
+          <InstructionType>ClearScheduleAndStartNext</InstructionType>
+          <ClearScheduleAndStartNext></ClearScheduleAndStartNext>
+        </Instruction>`
+      ));
+    }
+
+    // 8. SysGen catch-all award — required at end of every pairing group
     lines.push(lineContentFirst('AwardPairings',
       `<AwardPairings>
         <PairingProperties>
@@ -141,7 +165,7 @@ export function buildBidXml(model) {
     if (xml) lines.push(lineNumberFirst('PreferOff', xml));
   }
 
-  // SysGen fallback groups — required by NavBlue at end of every bid
+  // SysGen fallback groups — NavBlue requires these at the end of every bid
   lines.push(lineNumberFirstSysGen('StartPairings', '<StartPairings></StartPairings>'));
   lines.push(lineContentFirst('AwardPairings',
     `<AwardPairings>
@@ -152,7 +176,7 @@ export function buildBidXml(model) {
           </PairingProperty>
         </PairingProperties>
       </AwardPairings>`,
-    true  // sysGen
+    true
   ));
   lines.push(lineNumberFirstSysGen('StartReserve', '<StartReserve></StartReserve>'));
 
@@ -192,18 +216,47 @@ function buildSpecificPairings(numbers) {
     </AwardPairings>`;
 }
 
+// pref can be:
+//   'Weekends' (string)
+//   { dates: [...] }
+//   { dateRange: { start, end } }
+//   { daysOfWeek: [...] }
+//   any object form can include esn: true
 function buildPreferOff(pref) {
-  if (pref === 'Weekends') {
+  const isStr = typeof pref === 'string';
+  const esn = !isStr && pref.esn
+    ? '\n      <ElseStartNextBidGroup></ElseStartNextBidGroup>'
+    : '';
+
+  if (pref === 'Weekends' || (!isStr && pref.type === 'Weekends')) {
     return `<PreferOff>
       <PreferOffType>PreferOffWeekends</PreferOffType>
-      <PreferOffWeekends><Weekends></Weekends></PreferOffWeekends>
+      <PreferOffWeekends><Weekends></Weekends></PreferOffWeekends>${esn}
     </PreferOff>`;
   }
-  if (pref.dates) {
+  if (!isStr && pref.dates) {
     const datesXml = pref.dates.map(d => `<Date>${d}</Date>`).join('');
     return `<PreferOff>
       <PreferOffType>PreferOffDates</PreferOffType>
-      <PreferOffDates><Dates>${datesXml}</Dates></PreferOffDates>
+      <PreferOffDates><Dates>${datesXml}</Dates></PreferOffDates>${esn}
+    </PreferOff>`;
+  }
+  if (!isStr && pref.dateRange) {
+    return `<PreferOff>
+      <PreferOffType>PreferOffDateRange</PreferOffType>
+      <PreferOffDateRange>
+        <StartDate>${pref.dateRange.start}</StartDate>
+        <EndDate>${pref.dateRange.end}</EndDate>
+      </PreferOffDateRange>${esn}
+    </PreferOff>`;
+  }
+  if (!isStr && pref.daysOfWeek) {
+    const dowXml = pref.daysOfWeek.map(d => `<DayOfWeek>${d}</DayOfWeek>`).join('');
+    return `<PreferOff>
+      <PreferOffType>PreferOffDaysOfWeek</PreferOffType>
+      <PreferOffDaysOfWeek>
+        <DaysOfWeek>${dowXml}</DaysOfWeek>
+      </PreferOffDaysOfWeek>${esn}
     </PreferOff>`;
   }
   return '';
@@ -235,6 +288,36 @@ function buildLineCondition(cond) {
       <LineConditionType>TotalDaysOffInPeriod</LineConditionType>
       <TotalDaysOffInPeriod><Days>${cond.days}</Days></TotalDaysOffInPeriod>
     </LineCondition>`;
+    case 'MinimumCreditWindow': {
+      const h = String(Math.floor(cond.hours)).padStart(3, '0');
+      const m = String(cond.minutes || 0).padStart(2, '0');
+      return `<LineCondition>
+      <LineConditionType>MinimumCreditWindow</LineConditionType>
+      <MinimumCreditWindow>
+        <Time><Hour>${h}</Hour><Minute>${m}</Minute></Time>
+      </MinimumCreditWindow>
+    </LineCondition>`;
+    }
+    case 'MaximumCreditWindow': {
+      const h = String(Math.floor(cond.hours)).padStart(3, '0');
+      const m = String(cond.minutes || 0).padStart(2, '0');
+      return `<LineCondition>
+      <LineConditionType>MaximumCreditWindow</LineConditionType>
+      <MaximumCreditWindow>
+        <Time><Hour>${h}</Hour><Minute>${m}</Minute></Time>
+      </MaximumCreditWindow>
+    </LineCondition>`;
+    }
+    case 'Pattern': {
+      const parts = [];
+      if (cond.minDaysOn  != null) parts.push(`<MinDaysOn><Days>${cond.minDaysOn}</Days></MinDaysOn>`);
+      if (cond.maxDaysOn  != null) parts.push(`<MaxDaysOn><Days>${cond.maxDaysOn}</Days></MaxDaysOn>`);
+      if (cond.minDaysOff != null) parts.push(`<MinDaysOff><Days>${cond.minDaysOff}</Days></MinDaysOff>`);
+      return `<LineCondition>
+      <LineConditionType>Pattern</LineConditionType>
+      <Pattern>${parts.join('')}</Pattern>
+    </LineCondition>`;
+    }
     default:
       return '';
   }
@@ -270,6 +353,19 @@ function buildPairingPropertyContent(rule) {
         type: 'PairingCheckin'
       };
     }
+    case 'PairingCheckout': {
+      const [h, m] = rule.time.split(':');
+      return {
+        content: `<PairingCheckout>
+            <TimeCondition>
+              <Operator>${rule.operator || 'GT'}</Operator>
+              <Time><Hour>${h.padStart(2, '0')}</Hour><Minute>${m || '00'}</Minute></Time>
+            </TimeCondition>
+            <TimeType>TimeCondition</TimeType>
+          </PairingCheckout>`,
+        type: 'PairingCheckout'
+      };
+    }
     case 'LayoverStations': {
       // AnyEvery lives at PairingProperty level, not inside LandingsIn
       const stXml = rule.stations.map(s => `<Station>${s}</Station>`).join('');
@@ -303,6 +399,52 @@ function buildPairingPropertyContent(rule) {
             </TimeCondition>
           </TimeAwayFromBase>`,
         type: 'TimeAwayFromBase'
+      };
+    }
+    case 'PairingCredit': {
+      const [h, m] = rule.time.split(':');
+      return {
+        content: `<PairingCredit>
+            <TimeCondition>
+              <Operator>${rule.operator || 'GT'}</Operator>
+              <Time><Hour>${h.padStart(3, '0')}</Hour><Minute>${m || '00'}</Minute></Time>
+            </TimeCondition>
+            <TimeType>TimeCondition</TimeType>
+          </PairingCredit>`,
+        type: 'PairingCredit'
+      };
+    }
+    case 'AverageDailyCredit': {
+      const [h, m] = rule.time.split(':');
+      return {
+        content: `<AverageDailyCredit>
+            <TimeCondition>
+              <Operator>${rule.operator || 'GT'}</Operator>
+              <Time><Hour>${h.padStart(2, '0')}</Hour><Minute>${m || '00'}</Minute></Time>
+            </TimeCondition>
+            <TimeType>TimeCondition</TimeType>
+          </AverageDailyCredit>`,
+        type: 'AverageDailyCredit'
+      };
+    }
+    case 'DepartOnDayOfWeek': {
+      const dowXml = rule.days.map(d => `<DayOfWeek>${d}</DayOfWeek>`).join('');
+      return {
+        content: `<DepartOnDayOfWeek>
+            <DaysOfWeek>${dowXml}</DaysOfWeek>
+          </DepartOnDayOfWeek>`,
+        type: 'DepartOnDayOfWeek'
+      };
+    }
+    case 'DepartOnTimeRange': {
+      const [sh, sm] = rule.start.split(':');
+      const [eh, em] = rule.end.split(':');
+      return {
+        content: `<DepartOnTimeRange>
+            <StartTime><Hour>${sh.padStart(2, '0')}</Hour><Minute>${sm || '00'}</Minute></StartTime>
+            <EndTime><Hour>${eh.padStart(2, '0')}</Hour><Minute>${em || '00'}</Minute></EndTime>
+          </DepartOnTimeRange>`,
+        type: 'DepartOnTimeRange'
       };
     }
     case 'DutyIsRedeye':

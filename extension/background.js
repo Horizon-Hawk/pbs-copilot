@@ -71,27 +71,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Claude API call — background worker stays awake, no CORS issue
+  // Claude API call — proxied through Vercel backend (API key stays server-side)
   if (message.type === 'CLAUDE_REQUEST') {
-    fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': message.apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify(message.payload)
-    })
-    .then(res => res.json().then(data => ({ res, data })))
-    .then(({ res, data }) => {
-      if (!res.ok) {
-        sendResponse({ error: `Claude API error ${res.status}: ${data?.error?.message || JSON.stringify(data)}` });
-      } else {
-        sendResponse({ data });
+    chrome.storage.local.get('licenseKey', async ({ licenseKey }) => {
+      try {
+        const res = await fetch('https://pbs-copilot-backend.vercel.app/api/build', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ license_key: licenseKey || '', ...message.payload })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          sendResponse({ error: data.error || `Server error ${res.status}` });
+        } else {
+          sendResponse({ data });
+        }
+      } catch (err) {
+        sendResponse({ error: err.message });
       }
-    })
-    .catch(err => sendResponse({ error: err.message }));
+    });
     return true;
   }
 

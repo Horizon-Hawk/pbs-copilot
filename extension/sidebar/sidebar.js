@@ -35,40 +35,25 @@ async function init() {
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 async function loadStorage() {
-  const data = await chrome.storage.local.get(['constants', 'groups', 'apiKey', 'endpoint']);
+  const data = await chrome.storage.local.get(['constants', 'groups', 'licenseKey', 'endpoint']);
   constants = data.constants || {
-    avoid_employees: [],
-    checkin_before: '06:00',
-    min_between: 48,
-    avoid_stations: [],
-    prefer_weekends: true,
-    max_days_on: 6,
     min_credit: 75,
     max_credit: 90,
     pre_award_credit: 0
   };
   groups = data.groups || [];
 
-  if (data.apiKey) document.getElementById('setting-api-key').value = data.apiKey;
+  if (data.licenseKey) document.getElementById('setting-license-key').value = data.licenseKey;
   if (data.endpoint) document.getElementById('setting-endpoint').value = data.endpoint;
 }
 
 async function saveSettings() {
-  const apiKey = document.getElementById('setting-api-key').value.trim();
-  const endpoint = document.getElementById('setting-endpoint').value.trim();
-  await chrome.storage.local.set({ apiKey, endpoint });
+  const licenseKey = document.getElementById('setting-license-key').value.trim();
+  await chrome.storage.local.set({ licenseKey });
 }
 
 async function saveConstants() {
   constants = {
-    avoid_employees: document.getElementById('const-employees').value
-      .split(',').map(s => s.trim()).filter(Boolean),
-    checkin_before: document.getElementById('const-checkin-before').value,
-    min_between: parseInt(document.getElementById('const-min-between').value) || 48,
-    avoid_stations: document.getElementById('const-avoid-stations').value
-      .split(',').map(s => s.trim().toUpperCase()).filter(Boolean),
-    prefer_weekends: document.getElementById('const-prefer-weekends').checked,
-    max_days_on: parseInt(document.getElementById('const-max-days-on').value) || 6,
     min_credit: parseInt(document.getElementById('const-min-credit').value) || 75,
     max_credit: parseInt(document.getElementById('const-max-credit').value) || 90,
     pre_award_credit: parseFloat(document.getElementById('const-pre-award-credit').value) || 0
@@ -91,11 +76,6 @@ async function onSession(data) {
 
   document.getElementById('state-disconnected').classList.add('hidden');
   document.getElementById('state-connected').classList.remove('hidden');
-
-  // Hide token input when no validation endpoint is configured
-  chrome.storage.local.get('endpoint').then(({ endpoint }) => {
-    document.getElementById('token-input').style.display = endpoint ? '' : 'none';
-  });
 
   if (data.period) {
     loadPairings(data.period);    // non-blocking — display only
@@ -125,9 +105,19 @@ async function loadPairings(period) {
   try {
     const cached = await chrome.storage.local.get(['cachedPairingsXml', 'cachedPairingsFormat']);
     if (cached.cachedPairingsXml) {
-      const parsed = cached.cachedPairingsFormat === 'json'
-        ? parsePairingsJson(cached.cachedPairingsXml)
-        : parsePairingsXml(cached.cachedPairingsXml);
+      let parsed = [];
+      try {
+        parsed = cached.cachedPairingsFormat === 'json'
+          ? parsePairingsJson(cached.cachedPairingsXml)
+          : parsePairingsXml(cached.cachedPairingsXml);
+      } catch (e) {
+        // Format flag mismatch — try the other parser
+        try {
+          parsed = cached.cachedPairingsFormat === 'json'
+            ? parsePairingsXml(cached.cachedPairingsXml)
+            : parsePairingsJson(cached.cachedPairingsXml);
+        } catch (e2) {}
+      }
       if (parsed.length) {
         rawPairings = parsed;
         countEl.textContent = rawPairings.length;
@@ -366,28 +356,11 @@ function renderPairings() {
 function renderConstantsSummary() {
   const list = document.getElementById('constants-list');
   const items = [];
-  if (constants.avoid_employees?.length)
-    items.push(`Avoid: ${constants.avoid_employees.join(', ')}`);
-  if (constants.checkin_before)
-    items.push(`No CI before ${constants.checkin_before}`);
-  if (constants.min_between)
-    items.push(`≥${constants.min_between}h between trips`);
-  if (constants.avoid_stations?.length)
-    items.push(`No ${constants.avoid_stations.join('/')}`);
-  if (constants.prefer_weekends)
-    items.push('Prefer weekends off');
-  if (constants.max_days_on)
-    items.push(`Max ${constants.max_days_on} days on`);
   if (constants.pre_award_credit)
     items.push(`Pre-award ${constants.pre_award_credit}h → need ${Math.max(0, (constants.min_credit || 75) - constants.pre_award_credit)}h more`);
-  if (constants.min_credit)
-    items.push(`Min credit ${constants.min_credit}h`);
-  if (constants.max_credit)
-    items.push(`Max credit ${constants.max_credit}h`);
+  items.push(`Credit ${constants.min_credit || 75}–${constants.max_credit || 90}h`);
 
-  list.innerHTML = items.length
-    ? items.map(i => `<div class="summary-item">${i}</div>`).join('')
-    : '<div class="muted">No constants set</div>';
+  list.innerHTML = items.map(i => `<div class="summary-item">${i}</div>`).join('');
 }
 
 // ── Bid groups ────────────────────────────────────────────────────────────────
@@ -458,31 +431,7 @@ async function deleteGroup(index) {
 
 // ── Build bid ─────────────────────────────────────────────────────────────────
 function buildModelFromConstants() {
-  const avoid_pairings = [];
-  const line_conditions = [];
   const prefer_off = [];
-
-  if (constants.checkin_before) {
-    avoid_pairings.push({ type: 'PairingCheckin', operator: 'LT', time: constants.checkin_before });
-  }
-  if (constants.avoid_stations?.length) {
-    avoid_pairings.push({ type: 'LayoverStations', stations: constants.avoid_stations, match: 'Any' });
-  }
-  if (constants.min_between) {
-    line_conditions.push({ type: 'TimeBetweenPairings', hours: constants.min_between });
-  }
-  if (constants.max_days_on) {
-    line_conditions.push({ type: 'MaximumDaysOn', days: constants.max_days_on });
-  }
-  if (constants.min_credit) {
-    line_conditions.push({ type: 'MinimumCreditWindow', hours: constants.min_credit });
-  }
-  if (constants.max_credit) {
-    line_conditions.push({ type: 'MaximumCreditWindow', hours: constants.max_credit });
-  }
-  if (constants.prefer_weekends) {
-    prefer_off.push('Weekends');
-  }
 
   // Auto-add pre-awarded absence date ranges as prefer_off
   for (const absence of (session?.absences || [])) {
@@ -491,10 +440,10 @@ function buildModelFromConstants() {
   }
 
   return {
-    avoid_employees: constants.avoid_employees || [],
-    avoid_pairings,
+    avoid_employees: [],
+    avoid_pairings: [],
     prefer_off,
-    line_conditions
+    line_conditions: []
   };
 }
 
@@ -527,13 +476,7 @@ async function buildBid() {
   const preferences = document.getElementById('chat-input').value.trim();
   if (!preferences) return;
 
-  const { apiKey } = await chrome.storage.local.get('apiKey');
-  if (!apiKey) {
-    showStatus('chat-status', 'error', 'API key not set — open Settings first');
-    return;
-  }
-
-  showStatus('chat-status', 'loading', 'Building your bid with AI...');
+  showStatus('chat-status', 'loading', 'Building your bid with Copilot...');
   document.getElementById('btn-build').disabled = true;
 
   try {
@@ -542,13 +485,20 @@ async function buildBid() {
       pairings: rawPairings,
       absences: session?.absences || [],
       period: session?.period,
-      apiKey,
       preAwardCredit: constants.pre_award_credit || 0,
-      minCredit: constants.min_credit || 75
+      minCredit: constants.min_credit || 75,
+      constants
     });
 
     // Merge user's saved constants into the generated model
     model.constants = buildModelFromConstants();
+
+    // Safety net: if pilot mentioned weekends off, ensure PreferOff Weekends is set
+    if (/\b(weekends?\s*off|off\s*(on\s*)?weekends?|no\s*weekend\s*trips?|home\s*(for\s*)?weekends?)\b/i.test(preferences)) {
+      if (!model.constants.prefer_off.includes('Weekends')) {
+        model.constants.prefer_off.push('Weekends');
+      }
+    }
 
     // Merge saved groups' specific pairings / text if no groups returned
     if (!model.bid_groups?.length && groups.length) {
@@ -584,13 +534,37 @@ async function buildBid() {
   }
 }
 
+function preferOffLabel(pref) {
+  if (pref === 'Weekends') return 'Weekends';
+  if (pref?.dates) return `${pref.dates.length} specific dates`;
+  if (pref?.dateRange) return `${pref.dateRange.start} – ${pref.dateRange.end}`;
+  if (pref?.daysOfWeek) return pref.daysOfWeek.join('/');
+  return String(pref);
+}
+
 function renderBidPreview(model) {
   const preview = document.getElementById('bid-preview');
   if (!model?.bid_groups?.length) {
     preview.innerHTML = '';
     return;
   }
-  preview.innerHTML = model.bid_groups.map((g, i) => `
+
+  // Show applied global constants so the user can see what's always enforced
+  const globalParts = [];
+  for (const pref of (model.constants?.prefer_off || [])) {
+    globalParts.push(`PreferOff: ${preferOffLabel(pref)}`);
+  }
+  for (const cond of (model.constants?.line_conditions || [])) {
+    if (cond.type === 'MinimumCreditWindow') globalParts.push(`Min credit: ${cond.hours}h`);
+    if (cond.type === 'MaximumCreditWindow') globalParts.push(`Max credit: ${cond.hours}h`);
+    if (cond.type === 'TimeBetweenPairings') globalParts.push(`≥${cond.hours}h between trips`);
+    if (cond.type === 'MaximumDaysOn') globalParts.push(`Max ${cond.days} days on`);
+  }
+  const globalHtml = globalParts.length
+    ? `<div class="preview-global">Always: ${globalParts.join(' · ')}</div>`
+    : '';
+
+  preview.innerHTML = globalHtml + model.bid_groups.map((g, i) => `
     <div class="preview-group">
       <strong>${g.name || `Group ${i + 1}`}</strong>
       ${g.specific_pairings?.length ? `<div class="preview-line">Cherry-picked: ${g.specific_pairings.join(', ')}</div>` : ''}
@@ -603,11 +577,16 @@ function renderBidPreview(model) {
 
 function ruleLabel(rule) {
   switch (rule.type) {
-    case 'PairingCheckin': return `CI ${rule.operator === 'LT' ? 'before' : 'after'} ${rule.time}`;
-    case 'LayoverStations': return `${rule.stations?.join('/')} layover`;
-    case 'PairingLength': return `${rule.days}-day trip`;
-    case 'TimeAwayFromBase': return `TAFB ${rule.operator === 'GT' ? '>' : '<'} ${rule.time}`;
-    case 'DutyIsRedeye': return 'redeye';
+    case 'PairingCheckin':      return `CI ${rule.operator === 'LT' ? 'before' : 'after'} ${rule.time}`;
+    case 'PairingCheckout':     return `CO ${rule.operator === 'LT' ? 'before' : 'after'} ${rule.time}`;
+    case 'LayoverStations':     return `${rule.stations?.join('/')} layover`;
+    case 'PairingLength':       return `${rule.days}-day trip`;
+    case 'TimeAwayFromBase':    return `TAFB ${rule.operator === 'GT' ? '>' : '<'} ${rule.time}`;
+    case 'PairingCredit':       return `credit ${rule.operator === 'GT' ? '>' : '<'} ${rule.time}`;
+    case 'AverageDailyCredit':  return `avg credit ${rule.operator === 'GT' ? '>' : '<'} ${rule.time}/day`;
+    case 'DepartOnDayOfWeek':   return `depart ${rule.days?.join('/')}`;
+    case 'DepartOnTimeRange':   return `departs ${rule.start}–${rule.end}`;
+    case 'DutyIsRedeye':        return 'redeye';
     default: return rule.type;
   }
 }
@@ -624,31 +603,25 @@ async function submitBid() {
     return;
   }
 
-  const { endpoint } = await chrome.storage.local.get('endpoint');
-  const token = document.getElementById('token-input').value.trim();
+  const { licenseKey } = await chrome.storage.local.get('licenseKey');
 
-  // Token gate is optional — if no endpoint is configured, submit directly
-  const useTokenGate = !!endpoint;
-
-  if (useTokenGate && !token) {
-    showStatus('submit-status', 'error', 'Enter your submission token');
+  if (!licenseKey) {
+    showStatus('submit-status', 'error', 'No license key — add it in Settings ⚙');
     return;
   }
 
   document.getElementById('btn-submit').disabled = true;
 
   try {
-    if (useTokenGate) {
-      showStatus('submit-status', 'loading', 'Validating token...');
-      const vRes = await fetch(`${endpoint}/api/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
-      });
-      const vData = await vRes.json();
-      if (!vRes.ok || !vData.valid) {
-        throw new Error(vData.error || 'Invalid or already-used token');
-      }
+    showStatus('submit-status', 'loading', 'Validating license...');
+    const vRes = await fetch('https://pbs-copilot-backend.vercel.app/api/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ license_key: licenseKey })
+    });
+    const vData = await vRes.json();
+    if (!vRes.ok || !vData.valid) {
+      throw new Error(vData.error || 'Invalid license key — check Settings ⚙');
     }
 
     const targetEl = document.querySelector('input[name="bid-target"]:checked');
@@ -656,17 +629,7 @@ async function submitBid() {
     showStatus('submit-status', 'loading', `Submitting ${target} bid to NavBlue...`);
 
     const xml = buildBidXml(bidModel);
-    console.log('[PBS] Submitting BidLines XML (target:', target, '):', xml);
     await navblue.submitBid(period, xml, target);
-
-    if (useTokenGate) {
-      await fetch(`${endpoint}/api/consume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
-      });
-      document.getElementById('token-input').value = '';
-    }
 
     showStatus('submit-status', 'success', `${target === 'default' ? 'Default' : 'Current'} bid submitted!`);
   } catch (e) {
@@ -699,13 +662,6 @@ function bindEvents() {
 
   // Constants panel
   document.getElementById('btn-edit-constants').addEventListener('click', () => {
-    // Populate form from current constants
-    document.getElementById('const-employees').value = (constants.avoid_employees || []).join(', ');
-    document.getElementById('const-checkin-before').value = constants.checkin_before || '06:00';
-    document.getElementById('const-min-between').value = constants.min_between ?? 48;
-    document.getElementById('const-avoid-stations').value = (constants.avoid_stations || []).join(', ');
-    document.getElementById('const-prefer-weekends').checked = constants.prefer_weekends !== false;
-    document.getElementById('const-max-days-on').value = constants.max_days_on ?? 6;
     document.getElementById('const-pre-award-credit').value = constants.pre_award_credit ?? 0;
     document.getElementById('const-min-credit').value = constants.min_credit ?? 75;
     document.getElementById('const-max-credit').value = constants.max_credit ?? 90;
@@ -749,19 +705,6 @@ function bindEvents() {
       document.getElementById('btn-copy-data').textContent = '✓ Copied!';
       setTimeout(() => document.getElementById('btn-copy-data').textContent = '📋 Copy pairing data', 2000);
     });
-  });
-
-  // Round-trip debug
-  document.getElementById('btn-roundtrip').addEventListener('click', async () => {
-    const period = (session?.period || document.getElementById('period-input').value.trim()).toUpperCase();
-    if (!period || !navblue) { showStatus('submit-status', 'error', 'Not connected'); return; }
-    showStatus('submit-status', 'loading', 'Round-trip test — posting existing bid back unchanged...');
-    try {
-      await navblue.roundTripTest(period);
-      showStatus('submit-status', 'success', 'Round-trip OK — BidSets structure is accepted');
-    } catch (e) {
-      showStatus('submit-status', 'error', `Round-trip failed: ${e.message}`);
-    }
   });
 
   // Manual period load
@@ -887,18 +830,34 @@ function parsePairingsJson(jsonText) {
   if (!Array.isArray(data)) {
     data = data.arrPairings || data.pairings || data.data || [];
   }
-  return data.filter(p => p.strPairingNumber).map(p => ({
-    number:   p.strPairingNumber,
-    length:   p.strLength || p.strLengthValue || '',
+  if (!data.length) return [];
+
+  // Find the pairing number field — log all keys if not found
+  const sample = data[0];
+  const NUMBER_FIELDS = ['strPairingNumber', 'strNumber', 'strPairing', 'strPairingNum',
+                         'PairingNumber', 'number', 'strCode', 'strPairingCode'];
+  const numField = NUMBER_FIELDS.find(f => sample[f] != null)
+    || Object.keys(sample).find(k => /number|pairing|code/i.test(k) && typeof sample[k] === 'string');
+
+  if (!numField) {
+    console.warn('[PBS] parsePairingsJson: cannot find pairing number field. All keys:', Object.keys(sample).join(', '));
+    return [];
+  }
+
+  console.log('[PBS] parsePairingsJson: using number field:', numField);
+
+  return data.filter(p => p[numField]).map(p => ({
+    number:   p[numField],
+    length:   p.strLength || p.strLengthValue || p.intLength?.toString() || '',
     checkin:  p.strCheckinTime || '',
     checkout: p.strCheckoutTime || '',
     credit:   p.strCredit || '',
-    tafb:     p.strTafb || '',
+    tafb:     p.strTafb || p.strTAFB || '',
     layovers: Array.isArray(p.arrLayoverNames)
       ? p.arrLayoverNames
-      : (p.strLayoverNames || '').split(',').filter(Boolean),
-    dates:    p.strPairingDates || '',
-    detail:   p.strPairingReport || ''
+      : (p.strLayoverNames || p.strLayovers || '').split(',').filter(Boolean),
+    dates:    p.strPairingDates || p.strDates || '',
+    detail:   p.strPairingReport || p.strDetail || ''
   }));
 }
 

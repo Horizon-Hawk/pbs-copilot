@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PBS Copilot</title>
+  <title>Copilot</title>
   <link rel="stylesheet" href="sidebar.css">
 </head>
 <body>
 
   <!-- Header -->
   <div id="header">
-    <div id="header-title">PBS Copilot</div>
+    <div id="header-title">Copilot</div>
     <div id="header-meta" class="muted">Not connected</div>
     <button id="btn-settings" title="Settings">⚙</button>
   </div>
@@ -26,7 +26,7 @@
     <!-- Constants section -->
     <div class="section" id="section-constants">
       <div class="section-header" data-toggle="constants">
-        <span>⚙ Constants</span>
+        <span>⚙ Credit Hours</span>
         <span class="section-toggle">▾</span>
       </div>
       <div class="section-body" id="constants-body">
@@ -72,7 +72,7 @@
     <!-- AI Chat section -->
     <div class="section" id="section-chat">
       <div class="section-header">
-        <span>💬 Build with AI</span>
+        <span>💬 Build with Copilot</span>
       </div>
       <div class="section-body">
         <textarea id="chat-input" placeholder="Describe what you want this month...&#10;&#10;e.g. 3-4 day trips, no early shows, prefer SFO/LAX, need 18th-22nd off"></textarea>
@@ -99,10 +99,8 @@
           <label><input type="radio" name="bid-target" value="default"> Default Bid (always editable)</label>
         </div>
 
-        <input id="token-input" type="text" placeholder="Submission token (COPILOT-XXXX-XXXX)">
         <button class="btn-primary btn-submit" id="btn-submit">Submit Bid</button>
-        <button class="btn-secondary" id="btn-roundtrip" style="margin-top:4px;font-size:11px;">Debug: Round-trip existing bid</button>
-        <div id="submit-status" class="hidden"></div>
+<div id="submit-status" class="hidden"></div>
       </div>
     </div>
 
@@ -115,10 +113,8 @@
       <button id="btn-close-settings">✕</button>
     </div>
     <div class="overlay-body">
-      <label for="setting-api-key">Claude API Key</label>
-      <input id="setting-api-key" type="password" placeholder="sk-ant-...">
-      <label for="setting-endpoint">Validation Endpoint</label>
-      <input id="setting-endpoint" type="text" placeholder="https://your-vercel-app.vercel.app">
+      <label for="setting-license-key">License Key</label>
+      <input id="setting-license-key" type="text" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX">
       <button class="btn-primary" id="btn-save-settings">Save</button>
     </div>
   </div>
@@ -126,27 +122,10 @@
   <!-- Constants editor -->
   <div id="panel-constants" class="overlay hidden">
     <div class="overlay-header">
-      <span>Constants — Always Applied</span>
+      <span>Credit Hours</span>
       <button id="btn-close-constants">✕</button>
     </div>
     <div class="overlay-body">
-      <label for="const-employees">Avoid employees (comma-separated IDs)</label>
-      <input id="const-employees" type="text" placeholder="12345, 67890">
-
-      <label for="const-checkin-before">Avoid check-in before</label>
-      <input id="const-checkin-before" type="time" value="06:00">
-
-      <label for="const-min-between">Min hours between trips</label>
-      <input id="const-min-between" type="number" value="48" min="0" max="120">
-
-      <label for="const-avoid-stations">Always avoid stations (comma-separated)</label>
-      <input id="const-avoid-stations" type="text" placeholder="YVR, BUR, MRY">
-
-      <div class="form-label">Prefer off</div>
-      <label class="checkbox-row">
-        <input id="const-prefer-weekends" type="checkbox" checked> Weekends
-      </label>
-
       <label for="const-pre-award-credit">Pre-award credit this period (hrs) — GL trips, training, etc.</label>
       <input id="const-pre-award-credit" type="number" value="0" min="0" max="90" step="0.5">
 
@@ -156,10 +135,7 @@
       <label for="const-max-credit">Max credit hours (CBA: 90)</label>
       <input id="const-max-credit" type="number" value="90" min="0" max="120">
 
-      <label for="const-max-days-on">Max days on in a row (CBA: 6)</label>
-      <input id="const-max-days-on" type="number" value="6" min="1" max="7">
-
-      <button class="btn-primary" id="btn-save-constants">Save Constants</button>
+      <button class="btn-primary" id="btn-save-constants">Save</button>
     </div>
   </div>
 

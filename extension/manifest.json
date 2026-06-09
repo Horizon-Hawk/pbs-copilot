@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "PBS Copilot",
+  "name": "Copilot",
   "version": "0.1.0",
   "description": "AI-powered PBS bid builder for NavBlue",
 
@@ -14,8 +14,7 @@
 
   "host_permissions": [
     "*://*.pbs.vmc.navblue.cloud/*",
-    "https://api.anthropic.com/*",
-    "https://*.vercel.app/*"
+    "https://pbs-copilot-backend.vercel.app/*"
   ],
 
   "background": {

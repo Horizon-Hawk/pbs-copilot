@@ -1,150 +1,32 @@
-// Claude API client — converts plain English preferences to bid model JSON
+// Claude API client — parses plain English preferences into a flat preference object,
+// then deterministic JS translates that into a NavBlue bid model.
 
-const SYSTEM_PROMPT = `You are a PBS (Preferential Bidding System) expert for Horizon Air (QXE) NavBlue scheduling software.
-Your job is to convert a pilot's plain English preferences into a structured bid model JSON object.
+const SYSTEM_PROMPT = `You are a PBS bid preference parser for Horizon Air (QXE) NavBlue.
+Extract the pilot's plain English preferences into this exact JSON schema.
+Return ONLY the JSON object — no markdown, no explanation.
 
-The bid model structure:
 {
-  "bid_groups": [
-    {
-      "name": "Group 1 — descriptive label",
-      "waives": [],                  // optional: waive contract rules for this group (rare — see Waive types below)
-      "avoid_pairings": [],          // group-specific avoids
-      "award_pairings": [],          // ordered by preference, most wanted first
-      "specific_pairings": [],       // cherry-picked pairing numbers e.g. ["G3027", "G3043"]
-      "cssn": false,                 // ClearScheduleAndStartNext — clears tentative schedule before next group (advanced)
-      "else_start_next": true        // false only for the last group
-    }
-  ],
-  "reserve": {
-    "prefer_off": []
-  }
+  "trip_lengths": [],         // ordered preferred lengths e.g. [4,3]. Empty = no preference.
+  "checkin_after": null,      // "HH:MM" string or null
+  "checkin_before": null,     // "HH:MM" — avoid check-in before this time. null = no constraint.
+  "avoid_redeyes": false,
+  "layover_prefer": [],       // station codes e.g. ["SFO","LAX"]
+  "layover_avoid": [],        // station codes to avoid as layovers
+  "tafb_max_hours": null,     // number — max hours away from base. null = no limit.
+  "high_daily_credit": false, // true = prefer trips with high credit per day worked
+  "specific_pairings": [],    // explicitly named pairing numbers e.g. ["G3027","G3043"]
+  "depart_days": [],          // ONLY if pilot explicitly says to START trips on specific days
+                              // e.g. "start trips on Tuesdays" -> ["Tuesday"]
+                              // "weekends off" does NOT go here — leave empty.
+  "fallback_tiers": false     // true ONLY if pilot says "if I can't get X, give me Y"
 }
 
-Note: constants (avoid_pairings, prefer_off, line_conditions) are handled separately by the app and NOT included in your output.
-
-━━━ AVAILABLE RULE TYPES ━━━
-
-For avoid_pairings and award_pairings arrays:
-
-TIME-BASED:
-  { "type": "PairingCheckin", "operator": "LT"|"GT", "time": "HH:MM" }
-    — LT = avoid/prefer check-in BEFORE time; GT = AFTER time
-    — e.g. avoid early shows: { "type": "PairingCheckin", "operator": "LT", "time": "10:00" }
-    — e.g. prefer afternoon: { "type": "PairingCheckin", "operator": "GT", "time": "12:00" }
-
-  { "type": "PairingCheckout", "operator": "LT"|"GT", "time": "HH:MM" }
-    — LT = be home before time; GT = check out after time
-    — e.g. home by 10pm: { "type": "PairingCheckout", "operator": "LT", "time": "22:00" }
-
-  { "type": "DepartOnTimeRange", "start": "HH:MM", "end": "HH:MM" }
-    — pairing first departure falls within this window
-    — e.g. afternoon departures: { "type": "DepartOnTimeRange", "start": "11:00", "end": "18:00" }
-
-TRIP STRUCTURE:
-  { "type": "PairingLength", "operator": "EQ"|"LT"|"GT", "days": 1|2|3|4 }
-    — default operator is EQ (exact match)
-    — e.g. 3-day trips: { "type": "PairingLength", "days": 3 }
-    — e.g. short trips: { "type": "PairingLength", "operator": "LT", "days": 3 }
-
-  { "type": "TimeAwayFromBase", "operator": "GT"|"LT", "time": "HHH:MM" }
-    — total time away from base (TAFB); use 3-digit hours e.g. "024:00"
-    — e.g. avoid long TAFB: { "type": "TimeAwayFromBase", "operator": "LT", "time": "036:00" }
-
-  { "type": "DutyIsRedeye" }
-    — pairing contains a redeye duty period
-
-LAYOVERS:
-  { "type": "LayoverStations", "stations": ["SFO","LAX"], "match": "Any"|"All" }
-    — Any: at least one layover is in the list; All: every layover must be in the list
-    — e.g. prefer SFO/LAX: { "type": "LayoverStations", "stations": ["SFO","LAX"], "match": "Any" }
-
-CREDIT:
-  { "type": "PairingCredit", "operator": "GT"|"LT", "time": "H:MM" }
-    — total credit hours for the pairing
-    — e.g. high credit: { "type": "PairingCredit", "operator": "GT", "time": "8:00" }
-
-  { "type": "AverageDailyCredit", "operator": "GT"|"LT", "time": "H:MM" }
-    — average credit per day on the pairing
-    — e.g. good daily pay: { "type": "AverageDailyCredit", "operator": "GT", "time": "5:00" }
-
-DAYS OF WEEK:
-  { "type": "DepartOnDayOfWeek", "days": ["Monday","Tuesday",...] }
-    — pairing departs on one of the specified days
-    — day names: Monday Tuesday Wednesday Thursday Friday Saturday Sunday
-    — e.g. start trips mid-week: { "type": "DepartOnDayOfWeek", "days": ["Tuesday","Wednesday","Thursday"] }
-
-EMPLOYEE:
-  { "type": "LegWithEmployeeNumber", "employeeId": "12345" }
-    — avoid/award pairings that include a specific crew member (use in avoid_pairings only)
-
-━━━ WAIVE TYPES (group.waives) ━━━
-Only use when pilot explicitly wants to relax a contract rule for a specific group.
-Valid waive values: "MinimumDaysOffTo2", "1DayOffIn7", "2ConsecutiveDaysOff",
-  "TimeBetweenPairings", "MaximumConsecutiveDays", "MinimumRestBetweenDuties"
-
-━━━ CONSTRUCTION RULES ━━━
-1. Always produce at least one bid group plus a reserve group
-2. All bid groups except the last must have else_start_next: true
-3. The last bid group must have else_start_next: false
-4. If the pilot mentions specific pairing numbers, put them in specific_pairings
-5. "If I can't get X, try Y" = new bid group (else_start_next cascade)
-6. cssn: true is rarely needed — only use if pilot says "start fresh if this group fails"
-7. Return ONLY the JSON object, no markdown, no explanation
-
-━━━ COMMON PATTERNS ━━━
-
-"Afternoon starts" / "no early shows" / "late check-ins":
-  award: { "type": "PairingCheckin", "operator": "GT", "time": "12:00" }
-  (adjust time to pilot's stated preference — 10:00, 11:00, 13:00, 14:00 etc.)
-
-"Home for weekends" / "avoid weekend trips":
-  award: { "type": "DepartOnDayOfWeek", "days": ["Monday","Tuesday","Wednesday","Thursday"] }
-
-"High credit" / "maximize pay":
-  award: { "type": "PairingCredit", "operator": "GT", "time": "8:00" }
-  award: { "type": "AverageDailyCredit", "operator": "GT", "time": "5:30" }
-
-"Maximize days off" / "most time home" / "as much time off as possible":
-  This does NOT mean prefer 1-day trips. It means bid for shorter trips to accumulate more days off.
-  Structure groups to prefer short trips in order:
-    Group 1: specific cherry-picks if any
-    Group 2: award PairingLength 1-day
-    Group 3: award PairingLength 2-day
-    Group 4: award PairingLength 3-day  (else_start_next: false)
-
-"Nice layovers" / "good overnights" / "SFO/LAX/SEA":
-  award: { "type": "LayoverStations", "stations": ["SFO","LAX"], "match": "Any" }
-  Avoid the undesirable ones in avoid_pairings.
-
-"No redeyes":
-  avoid: { "type": "DutyIsRedeye" }
-
-"Short trips home quickly" / "quick turnarounds":
-  award: { "type": "TimeAwayFromBase", "operator": "LT", "time": "036:00" }
-
-━━━ CREDIT TARGETING ━━━
-When a credit_context block is provided in the user message:
-- Group 1: cherry-pick the specific pairings listed in credit_context.cherry_picks (specific_pairings array)
-  Name this group "Target [remaining_hours]h — Cherry-picks"
-- Group 2: fallback — award 4-day trips (PairingLength EQ 4)
-  Name this group "Fallback — 4-Day Trips"
-- Group 3: fallback — award 3-day trips (PairingLength EQ 3)
-  Name this group "Fallback — 3-Day Trips"
-- DO NOT use generic PairingCredit award rules in the cherry-pick group — specific_pairings already targets the right trips
-- The last group must have else_start_next: false
-
-When no credit values are available for pairings, structure by trip length only (longest first).
-
-━━━ ABSENCE HANDLING ━━━
-When pre-awarded absences are provided:
-- Those dates are automatically blocked as prefer_off — do NOT add them again
-- Note which dates are already spoken for when sizing the bid
-- If absences cover many days, fewer trips are needed — structure groups accordingly
-
-━━━ QXE STATION CODES ━━━
-GEG SEA PDX BOI YVR YYC SFO LAX SAN OAK SJC SMF RNO LAS PHX TUS
-BUR MRY SNA RDM EUG MFR ALW PSC YKM ANC FAI`;
+Rules:
+- "weekends off" / "home on weekends" / "prefer weekends off" -> leave depart_days empty. The system handles this automatically.
+- depart_days is ONLY for explicit departure day requests like "I want to start trips on Tuesdays".
+- Default fallback_tiers: false (one group) unless pilot explicitly asks for tiers or fallbacks.
+- trip_lengths: order most preferred first e.g. "prefer 4-day, ok with 3-day" -> [4, 3]
+- checkin_after: use the latest stated time e.g. "no early shows" -> "10:00", "afternoons only" -> "12:00"`;
 
 
 function toMinutes(timeStr) {
@@ -165,13 +47,13 @@ function selectCreditTargetPairings(pairings, remainingHours, mode = 'credit') {
       return { ...p, creditMins, creditPerDay: creditMins / days };
     })
     .sort((a, b) => mode === 'days_off'
-      ? b.creditPerDay - a.creditPerDay  // highest credit/day = fewest days away
-      : b.creditMins - a.creditMins      // highest total credit = fewest trips
+      ? b.creditPerDay - a.creditPerDay
+      : b.creditMins - a.creditMins
     );
 
   if (!candidates.length) return null;
 
-  // Step 1: greedily add trips (largest first) that don't exceed the target
+  // Greedily add trips that don't exceed the target
   const selected = [];
   let total = 0;
   for (const p of candidates) {
@@ -182,7 +64,7 @@ function selectCreditTargetPairings(pairings, remainingHours, mode = 'credit') {
     }
   }
 
-  // Step 2: if still short, add whichever single unselected trip lands closest to the gap
+  // Add one trip closest to the remaining gap
   if (total < targetMins) {
     const gap = targetMins - total;
     const filler = candidates
@@ -205,11 +87,100 @@ function selectCreditTargetPairings(pairings, remainingHours, mode = 'credit') {
   };
 }
 
-export async function buildBidFromPreferences({ preferences, pairings, absences, period, apiKey, preAwardCredit = 0, minCredit = 75 }) {
+// Deterministic translation: flat prefs object → bid model JSON for bid_builder.js
+function buildBidModel(prefs, constants, creditContext) {
+  function buildAvoids() {
+    const avoids = [];
+    if (prefs.avoid_redeyes) {
+      avoids.push({ type: 'DutyIsRedeye' });
+    }
+    if (prefs.layover_avoid?.length) {
+      avoids.push({ type: 'LayoverStations', stations: prefs.layover_avoid, match: 'Any' });
+    }
+    if (prefs.checkin_before) {
+      avoids.push({ type: 'PairingCheckin', operator: 'LT', time: prefs.checkin_before });
+    }
+    return avoids;
+  }
+
+  function buildAwards(fixedLength) {
+    const awards = [];
+    if (fixedLength != null) {
+      awards.push({ type: 'PairingLength', operator: 'EQ', days: fixedLength });
+    } else if (prefs.trip_lengths?.length) {
+      for (const len of prefs.trip_lengths) {
+        awards.push({ type: 'PairingLength', operator: 'EQ', days: len });
+      }
+    }
+    if (prefs.checkin_after) {
+      awards.push({ type: 'PairingCheckin', operator: 'GT', time: prefs.checkin_after });
+    }
+    if (prefs.layover_prefer?.length) {
+      awards.push({ type: 'LayoverStations', stations: prefs.layover_prefer, match: 'Any' });
+    }
+    if (prefs.tafb_max_hours != null) {
+      const h = String(Math.floor(prefs.tafb_max_hours)).padStart(3, '0');
+      awards.push({ type: 'TimeAwayFromBase', operator: 'LT', time: `${h}:00` });
+    }
+    if (prefs.high_daily_credit) {
+      awards.push({ type: 'AverageDailyCredit', operator: 'GT', time: '5:30' });
+    }
+    if (prefs.depart_days?.length) {
+      awards.push({ type: 'DepartOnDayOfWeek', days: prefs.depart_days });
+    }
+    return awards;
+  }
+
+  function makeGroup(name, fixedLength, specific, elseNext) {
+    return {
+      name,
+      waives: [],
+      avoid_pairings: buildAvoids(),
+      award_pairings: buildAwards(fixedLength),
+      specific_pairings: specific || [],
+      cssn: false,
+      else_start_next: elseNext
+    };
+  }
+
+  const hasCherry = creditContext?.cherry_picks?.length > 0 || prefs.specific_pairings?.length > 0;
+  const hasTiers = prefs.fallback_tiers && prefs.trip_lengths?.length > 1;
+  const bid_groups = [];
+
+  if (hasCherry) {
+    const cherryNums = creditContext?.cherry_picks?.length
+      ? creditContext.cherry_picks
+      : (prefs.specific_pairings || []);
+    const groupName = creditContext
+      ? `Target ${creditContext.remaining_hours}h — Cherry-picks`
+      : 'Cherry-picked pairings';
+    bid_groups.push(makeGroup(groupName, null, cherryNums, true));
+    bid_groups.push(makeGroup('Fallback — Any qualifying trip', null, [], false));
+  } else if (hasTiers) {
+    prefs.trip_lengths.forEach((len, i) => {
+      bid_groups.push(makeGroup(`${len}-Day Trips`, len, [], i < prefs.trip_lengths.length - 1));
+    });
+  } else {
+    // Single group — default
+    const nameParts = [];
+    if (prefs.trip_lengths?.length) nameParts.push(prefs.trip_lengths.map(l => `${l}-day`).join('/') + ' trips');
+    if (prefs.checkin_after) nameParts.push(`CI after ${prefs.checkin_after}`);
+    if (prefs.layover_prefer?.length) nameParts.push(prefs.layover_prefer.join('/') + ' layovers');
+    if (prefs.avoid_redeyes) nameParts.push('no redeyes');
+    if (prefs.depart_days?.length) nameParts.push('depart ' + prefs.depart_days.join('/'));
+    if (prefs.high_daily_credit) nameParts.push('high credit/day');
+    bid_groups.push(makeGroup(nameParts.join(', ') || 'My Bid', null, [], false));
+  }
+
+  return {
+    bid_groups,
+    reserve: { prefer_off: [] }
+  };
+}
+
+export async function buildBidFromPreferences({ preferences, pairings, absences, period, preAwardCredit = 0, minCredit = 75, constants = null }) {
   const absenceContext = absences?.length
-    ? `\n\nPre-awarded days off this period (already blocked in the system):\n${absences.map(a =>
-        `  ${a.code}: ${a.start} → ${a.end}`
-      ).join('\n')}\nThese dates are automatically added as prefer_off. Build the bid to complement this schedule.\n`
+    ? `\nPre-awarded days off (system-blocked): ${absences.map(a => `${a.code}: ${a.start}→${a.end}`).join(', ')}`
     : '';
 
   const remainingCredit = Math.max(0, minCredit - preAwardCredit);
@@ -220,52 +191,43 @@ export async function buildBidFromPreferences({ preferences, pairings, absences,
   const selectionMode = isDaysOffRequest ? 'days_off' : 'credit';
   const creditContext = isCreditRequest ? selectCreditTargetPairings(pairings || [], remainingCredit, selectionMode) : null;
 
-  const modeLabel = isDaysOffRequest
-    ? `fewest days away to reach ${remainingCredit}h (sorted by credit/day)`
-    : `fewest trips to reach ${remainingCredit}h (sorted by total credit)`;
-
-  const creditMathContext = isCreditRequest
-    ? `\n\nCredit math:\n` +
-      `  Pre-award credit this period: ${preAwardCredit}h\n` +
-      `  Minimum credit target: ${minCredit}h\n` +
-      `  Remaining credit to fill via bidding: ${remainingCredit}h\n` +
-      (creditContext
-        ? `  credit_context: ${JSON.stringify(creditContext)}\n` +
-          `  (Selection mode: ${modeLabel} — ${creditContext.trip_count} trips summing to ${creditContext.total_credit}h)\n`
-        : `  (No credit values available in pairings — structure by trip length)\n`)
+  const creditNote = isCreditRequest
+    ? `\nCredit target: need ${remainingCredit}h more (${preAwardCredit}h pre-awarded, ${minCredit}h minimum).` +
+      (creditContext ? ` Pre-selected: ${creditContext.cherry_picks.join(', ')} = ${creditContext.total_credit}h in ${creditContext.trip_count} trips.` : '')
     : '';
 
-  const pairingContext = pairings?.length
-    ? `\n\nAvailable pairings this period (${pairings.length} total, showing first 80):\n${pairings.slice(0, 80).map(p =>
-        `${p.number}: ${p.length}-day, credit ${p.credit || '?'}, CI ${p.checkin}, CO ${p.checkout}, layovers: ${p.layovers.join('/') || 'none'}`
-      ).join('\n')}`
+  const stationCodes = pairings?.length
+    ? [...new Set(pairings.flatMap(p => p.layovers || []))].filter(Boolean).sort().join(', ')
     : '';
 
-  const periodContext = period ? `\nBid period: ${period}\n` : '';
+  const userMessage = [
+    period ? `Bid period: ${period}` : '',
+    absenceContext,
+    creditNote,
+    stationCodes ? `Available layover stations this period: ${stationCodes}` : '',
+    '',
+    `Pilot preferences: ${preferences}`
+  ].filter(Boolean).join('\n');
 
   const result = await chrome.runtime.sendMessage({
     type: 'CLAUDE_REQUEST',
-    apiKey,
     payload: {
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2048,
+      max_tokens: 512,
       system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: `Build a bid model for these preferences:\n\n${preferences}${periodContext}${absenceContext}${creditMathContext}${pairingContext}`
-        }
-      ]
+      messages: [{ role: 'user', content: userMessage }]
     }
   });
 
   if (result.error) throw new Error(result.error);
 
-  const data = result.data;
-  const text = data.content[0].text.trim();
+  const text = result.data.content[0].text.trim();
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1) throw new Error('Claude did not return a valid preference object');
+  const prefs = JSON.parse(text.slice(start, end + 1));
 
-  const json = text.replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-  const model = JSON.parse(json);
+  const model = buildBidModel(prefs, constants, creditContext);
   model._meta = { creditContext, selectionMode };
   return model;
 }
@@ -286,17 +248,14 @@ export function scorePairings(pairings, model) {
     if (specific.includes(p.number)) {
       return { ...p, score: 'picked', reason: 'Cherry-picked' };
     }
-
     for (const rule of avoids) {
       const hit = matchesRule(rule, p);
       if (hit) return { ...p, score: 'avoid', reason: hit };
     }
-
     for (const rule of awards) {
       const hit = matchesRule(rule, p);
       if (hit) return { ...p, score: 'match', reason: hit };
     }
-
     return { ...p, score: 'neutral', reason: '' };
   });
 }
@@ -332,7 +291,7 @@ function matchesRule(rule, p) {
       if (match === 'Any' && p.layovers.some(l => rule.stations.includes(l)))
         return `Layover: ${p.layovers.filter(l => rule.stations.includes(l)).join('/')}`;
       if (match === 'All' && rule.stations.every(s => p.layovers.includes(s)))
-        return `All layovers match: ${rule.stations.join('/')}`;
+        return `All layovers: ${rule.stations.join('/')}`;
       return null;
     }
     case 'PairingLength': {
@@ -362,7 +321,6 @@ function matchesRule(rule, p) {
       return null;
     }
     case 'DutyIsRedeye':
-      // Can't reliably detect from parsed pairing summary alone
       return null;
     default:
       return null;

@@ -75,7 +75,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'CLAUDE_REQUEST') {
     chrome.storage.local.get('licenseKey', async ({ licenseKey }) => {
       try {
-        const res = await fetch('https://pbs-copilot-backend.vercel.app/api/build', {
+        const res = await fetch('https://pbs-copilot-backend.vercel.app/api/claude', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ license_key: licenseKey || '', ...message.payload })

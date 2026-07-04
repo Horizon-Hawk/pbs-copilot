@@ -216,6 +216,15 @@ export function enforcePicks(pickNumbers, candidates, { minGap = 0 } = {}) {
   return kept.map(p => p.number);
 }
 
+// Pull the assistant's text out of a Claude response. Sonnet (extended thinking) emits a
+// `thinking` content block first, so we must find the `text` block, not assume content[0].
+function extractText(data) {
+  const blocks = data?.content;
+  if (!Array.isArray(blocks)) return '';
+  const t = blocks.find(b => b?.type === 'text' && typeof b.text === 'string');
+  return t ? t.text : '';
+}
+
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 function dowOf(iso) { const t = Date.parse(iso + 'T00:00:00Z'); return Number.isNaN(t) ? '?' : DOW[new Date(t).getUTCDay()]; }
 
@@ -261,7 +270,7 @@ ${rows}`;
     }
   });
   if (result?.error) throw new Error(result.error);
-  const text = result.data.content?.[0]?.text || '';
+  const text = extractText(result?.data);
   const s = text.indexOf('{'), e = text.lastIndexOf('}');
   if (s === -1 || e === -1) return { picks: [], reasoning: '' };
   try {
@@ -396,13 +405,23 @@ export async function buildBidFromPreferences({ preferences, pairings, absences,
     }
   });
 
-  if (result.error) throw new Error(result.error);
+  if (result?.error) throw new Error(result.error);
 
-  const text = result.data.content[0].text.trim();
+  // Sonnet returns a `thinking` block BEFORE the text block, so content[0] is not the answer —
+  // find the text block. (This is why the parser broke on Sonnet but worked on Haiku.)
+  const text = (extractText(result?.data) || '').trim();
+  if (!text) {
+    throw new Error('No response from the bid AI — check the backend is deployed and the model id is valid.');
+  }
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('Claude did not return a valid preference object');
-  const prefs = JSON.parse(text.slice(start, end + 1));
+  if (start === -1 || end === -1) throw new Error('AI did not return a valid preference object. Got: ' + text.slice(0, 120));
+  let prefs;
+  try {
+    prefs = JSON.parse(text.slice(start, end + 1));
+  } catch (e) {
+    throw new Error('AI returned malformed JSON: ' + e.message);
+  }
 
   // ── 2. Selection request? (cherry-pick / max-days-off / credit-target) ──
   const isDaysOffRequest = /\b(max(imum)?\s*(days?\s*off|time\s*(off|home))|most\s*(days?\s*(off|home)|time\s*(off|home))|fewest\s*days?\s*(work|away|on))\b/i.test(preferences);

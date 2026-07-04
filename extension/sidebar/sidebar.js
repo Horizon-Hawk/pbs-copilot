@@ -110,11 +110,18 @@ async function loadPairings(period) {
             : parsePairingsJson(cached.cachedPairingsXml);
         } catch (e2) {}
       }
-      if (parsed.length) {
+      // Guard against a STALE cache from a previous bid period (e.g. July pairings still
+      // cached while bidding August). The cache carries no period stamp, so derive it from
+      // the pairing dates and only trust the cache if it matches the requested period.
+      const cachedCode = parsed.length ? pairingsPeriodCode(parsed) : null;
+      const wantCode = (period || '').toUpperCase();
+      if (parsed.length && wantCode && cachedCode && cachedCode !== wantCode) {
+        console.warn(`[PBS] Ignoring stale cached pairings (${cachedCode}) — bidding ${wantCode}. Fetching fresh.`);
+      } else if (parsed.length) {
         rawPairings = parsed;
         countEl.textContent = rawPairings.length;
         renderPairings();
-        console.log('[PBS] Loaded', rawPairings.length, 'pairings from storage cache');
+        console.log('[PBS] Loaded', rawPairings.length, `pairings from storage cache (${cachedCode || 'period unknown'})`);
         return;
       }
     }
@@ -468,6 +475,15 @@ async function buildBid() {
   const preferences = document.getElementById('chat-input').value.trim();
   if (!preferences) return;
 
+  // Period guard: never build (and risk submitting) a bid from another month's pairings.
+  const wantCode = (session?.period || '').toUpperCase();
+  const haveCode = pairingsPeriodCode(rawPairings);
+  if (wantCode && haveCode && wantCode !== haveCode) {
+    showStatus('chat-status', 'error',
+      `Loaded pairings are ${haveCode} but you're bidding ${wantCode}. Reload ${wantCode} pairings (open the Pairings screen in NavBlue for ${wantCode}), then rebuild.`);
+    return;
+  }
+
   showStatus('chat-status', 'loading', 'Building your bid with Copilot...');
   document.getElementById('btn-build').disabled = true;
 
@@ -506,17 +522,36 @@ async function buildBid() {
     const meta = model._meta;
     delete model._meta;
 
+    // Merge NL-parsed "set condition" line conditions (min base layover, min credit window, …)
+    // into the model — buildModelFromConstants() only carries the UI panel's constants.
+    if (meta?.line_conditions?.length) {
+      model.constants.line_conditions = [
+        ...(model.constants.line_conditions || []),
+        ...meta.line_conditions
+      ];
+    }
+
     bidModel = model;
     renderPairings();
     renderBidPreview(model);
+
+    // Never silently drop: if the parser couldn't map part of the request, tell the pilot.
+    if (meta?.unsupported?.length) {
+      showStatus('chat-status', 'error',
+        `Built, but couldn't set: ${meta.unsupported.join('; ')}. These aren't supported yet — everything else was applied.`);
+      document.getElementById('btn-build').disabled = false;
+      return;
+    }
 
     let statusMsg = `Bid built — ${model.bid_groups?.length || 0} group(s)`;
     if (meta?.creditContext) {
       const { total_credit, trip_count, days_worked } = meta.creditContext;
       const periodDays = getPeriodDays(session?.period);
       const daysOff = (periodDays && days_worked) ? periodDays - days_worked : null;
-      statusMsg = `${trip_count} trip${trip_count !== 1 ? 's' : ''} · ${total_credit}h credit`;
+      const by = meta.selection?.engine === 'api' ? '🤖 AI' : '⚙ optimizer';
+      statusMsg = `${by} · ${trip_count} trip${trip_count !== 1 ? 's' : ''} · ${total_credit}h credit`;
       if (daysOff !== null) statusMsg += ` · ${daysOff} days off`;
+      if (meta.selection?.reasoning) statusMsg += ` — ${meta.selection.reasoning}`;
     }
     showStatus('chat-status', 'success', statusMsg);
   } catch (e) {
@@ -774,18 +809,77 @@ function parsePairingsXml(xml) {
     // Try both known attribute name variants
     const num = p.getAttribute('Number') || p.getAttribute('PairingNumber') ||
                 p.getAttribute('OriginalNumber') || p.getAttribute('strPairingNumber') || null;
+    const length = p.getAttribute('Length') || p.getAttribute('Days') || null;
+
+    // Operating dates live in <PairingOnDates><PairingOnDate Date="YYYY-MM-DD"> children,
+    // NOT a flat attribute — the old parser missed these entirely.
+    const dates = [...p.querySelectorAll('PairingOnDate')]
+      .map(d => d.getAttribute('Date') || d.getAttribute('EffectiveDate'))
+      .filter(Boolean).sort();
+
+    // Landing/departure stations from every <PairingLeg ArrLoc/DeptLoc>.
+    const legStations = new Set();
+    for (const leg of p.querySelectorAll('PairingLeg')) {
+      const a = leg.getAttribute('ArrLoc'); const d = leg.getAttribute('DeptLoc');
+      if (a) legStations.add(a);
+      if (d) legStations.add(d);
+    }
+    const landings = [...legStations];
+
+    // Layover cities from <Layover Location="…"> children.
+    const layovers = [...p.querySelectorAll('Layover')]
+      .map(l => l.getAttribute('Location')).filter(Boolean);
+
+    const len = parseInt(length) || 1;
+    const start = dates[0] || null;
+    const end = start ? addDaysISO(start, len - 1) : null;
+
     return {
       number:   num,
-      length:   p.getAttribute('Length') || p.getAttribute('Days') || null,
+      length,
       checkin:  p.getAttribute('CheckIn') || p.getAttribute('CheckinTime') || p.getAttribute('CheckInTime') || null,
       checkout: p.getAttribute('CheckOut') || p.getAttribute('CheckoutTime') || p.getAttribute('CheckOutTime') || null,
       credit:   p.getAttribute('Credit') || null,
       tafb:     p.getAttribute('Tafb') || p.getAttribute('TAFB') || p.getAttribute('TimeAwayFromBase') || null,
-      layovers: (p.getAttribute('LayoverLocationNames') || p.getAttribute('Layovers') || '').split(',').filter(Boolean),
-      dates:    p.getAttribute('Dates') || p.getAttribute('PairingDates') || null,
+      redeye:   (p.getAttribute('IsRedEye') || '').toLowerCase() === 'true',
+      landings,
+      layovers,
+      stations: [...new Set([...landings, ...layovers])],
+      dates,
+      start,
+      end,
       detail:   p.getAttribute('DetailReport') || ''
     };
   }).filter(p => p.number); // drop items where no number attribute matched
+}
+
+// Map an ISO date to a NavBlue period code, e.g. '2026-08-05' -> 'AUG26'.
+function periodCodeFromDate(iso) {
+  if (!/^\d{4}-\d{2}/.test(iso || '')) return null;
+  const [y, mo] = iso.split('-');
+  const M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][parseInt(mo, 10) - 1];
+  return M ? `${M}${y.slice(2)}` : null;
+}
+// The dominant period code across a set of pairings (from their operating dates).
+function pairingsPeriodCode(pairings) {
+  const counts = {};
+  for (const p of pairings || []) {
+    const d = p.start || (Array.isArray(p.dates) ? p.dates[0] : null);
+    const code = d ? periodCodeFromDate(d) : null;
+    if (code) counts[code] = (counts[code] || 0) + 1;
+  }
+  let best = null, n = 0;
+  for (const [k, v] of Object.entries(counts)) if (v > n) { best = k; n = v; }
+  return best;
+}
+
+// Add N days to an ISO date string (UTC-safe), returning 'YYYY-MM-DD'. Returns null on a
+// missing/malformed date rather than throwing "Invalid time value".
+function addDaysISO(iso, n) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const t = Date.parse(iso + 'T00:00:00Z');
+  if (Number.isNaN(t)) return null;
+  return new Date(t + n * 86400000).toISOString().slice(0, 10);
 }
 
 function parsePairingsJson(jsonText) {
@@ -810,19 +904,38 @@ function parsePairingsJson(jsonText) {
 
   console.log('[PBS] parsePairingsJson: using number field:', numField);
 
-  return data.filter(p => p[numField]).map(p => ({
-    number:   p[numField],
-    length:   p.strLength || p.strLengthValue || p.intLength?.toString() || '',
-    checkin:  p.strCheckinTime || '',
-    checkout: p.strCheckoutTime || '',
-    credit:   p.strCredit || '',
-    tafb:     p.strTafb || p.strTAFB || '',
-    layovers: Array.isArray(p.arrLayoverNames)
+  return data.filter(p => p[numField]).map(p => {
+    const length = p.strLength || p.strLengthValue || p.intLength?.toString() || '';
+    // dates MUST be an array of ISO strings (downstream date math indexes dates[0]).
+    const rawDates = Array.isArray(p.arrPairingDates) ? p.arrPairingDates
+      : Array.isArray(p.arrDates) ? p.arrDates
+      : (p.strPairingDates || p.strDates || '').split(',');
+    const dates = rawDates.map(d => (d || '').trim()).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+    const layovers = Array.isArray(p.arrLayoverNames)
       ? p.arrLayoverNames
-      : (p.strLayoverNames || p.strLayovers || '').split(',').filter(Boolean),
-    dates:    p.strPairingDates || p.strDates || '',
-    detail:   p.strPairingReport || p.strDetail || ''
-  }));
+      : (p.strLayoverNames || p.strLayovers || '').split(',').filter(Boolean);
+    const landings = Array.isArray(p.arrLandingStations) ? p.arrLandingStations
+      : (p.strLandingStations || '').split(',').filter(Boolean);
+    const len = parseInt(length) || 1;
+    const start = dates[0] || null;
+    const end = start ? addDaysISO(start, len - 1) : null;
+    return {
+      number:   p[numField],
+      length,
+      checkin:  p.strCheckinTime || '',
+      checkout: p.strCheckoutTime || '',
+      credit:   p.strCredit || '',
+      tafb:     p.strTafb || p.strTAFB || '',
+      redeye:   String(p.blnRedEye ?? p.strRedEye ?? '').toLowerCase() === 'true',
+      landings,
+      layovers,
+      stations: [...new Set([...landings, ...layovers])],
+      dates,
+      start,
+      end,
+      detail:   p.strPairingReport || p.strDetail || ''
+    };
+  });
 }
 
 function showStatus(elementId, type, text) {

@@ -22,8 +22,15 @@ export class NavblueClient {
     });
     if (!res || res.error) throw new Error(res?.error || 'NavBlue fetch failed');
     if (!res.ok) {
-      console.error('[PBS] NavBlue error', res.status, ':', res.body?.slice(0, 500));
-      throw new Error(`NavBlue ${res.status}: ${res.body?.slice(0, 200)}`);
+      // Log full response body in chunks so DevTools console doesn't truncate
+      const errBody = res.body || '';
+      console.error('[PBS] NavBlue error', res.status, '(full response below)');
+      for (let i = 0; i < errBody.length; i += 1000) {
+        console.error('[PBS] response chunk', Math.floor(i/1000), ':', errBody.slice(i, i + 1000));
+      }
+      // Store last error for easy access: copy from console with window.__pbsLastError
+      try { chrome.storage.local.set({ pbsLastError: { status: res.status, body: errBody } }); } catch(e) {}
+      throw new Error(`NavBlue ${res.status}: ${errBody.slice(0, 500)}`);
     }
     return res.body;
   }
@@ -91,14 +98,9 @@ export class NavblueClient {
 
     bidSets = bidSets.replace(/^<BidSets[^>]*>/, tag => {
       if (!tag.includes('xmlns')) tag = tag.replace('<BidSets', '<BidSets xmlns="http://tempuri.org"');
-      tag = this._cleanBidSetsTag(tag);
-      // Tell NavBlue which bid section was modified
-      if (target === 'default') {
-        tag = tag.replace(/DefaultBidsModified="[^"]*"/, 'DefaultBidsModified="true"');
-      } else {
-        tag = tag.replace(/CurrentBidsModified="[^"]*"/, 'CurrentBidsModified="true"');
-      }
-      return tag;
+      // NavBlue's native UI always sends both Modified flags as "false" — setting either to "true"
+      // triggers strict server-side schema validation that rejects our generated BidLine elements.
+      return this._cleanBidSetsTag(tag);
     });
 
     const innerMatch = bidLinesXml.match(/<BidLines>([\s\S]*?)<\/BidLines>/);
@@ -128,7 +130,16 @@ export class NavblueClient {
     }
 
     const body = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n${bidSets}`;
-    console.log('[PBS] POST body (full):', body);
+
+    // Store full POST body so it can be copied without console truncation:
+    //   chrome.storage.local.get('pbsLastPostBody', r => console.log(r.pbsLastPostBody))
+    try { chrome.storage.local.set({ pbsLastPostBody: body }); } catch(e) {}
+
+    // Log in chunks — DevTools truncates large single log lines
+    console.log('[PBS] POST body length:', body.length, '— stored in pbsLastPostBody (run: chrome.storage.local.get("pbsLastPostBody", r => console.log(r.pbsLastPostBody)))');
+    for (let i = 0; i < body.length; i += 2000) {
+      console.log(`[PBS] POST body chunk ${Math.floor(i/2000)}:`, body.slice(i, i + 2000));
+    }
 
     return this._fetch(
       { FileType: 'bidset', function: 'set', period },
@@ -203,16 +214,52 @@ export class NavblueClient {
     const parser = new DOMParser();
     const doc = parser.parseFromString(xml, 'text/xml');
 
-    return [...doc.querySelectorAll('Pairing')].map(p => ({
-      number: p.getAttribute('Number'),
-      length: p.getAttribute('Length'),
-      checkin: p.getAttribute('CheckIn'),
-      checkout: p.getAttribute('CheckOut'),
-      credit: p.getAttribute('Credit'),
-      tafb: p.getAttribute('Tafb'),
-      layovers: p.getAttribute('LayoverLocationNames')?.split(',').filter(Boolean) || [],
-      dates: p.getAttribute('Dates'),
-      detail: p.getAttribute('DetailReport') || ''
-    }));
+    return [...doc.querySelectorAll('Pairing')].map(p => {
+      const number = p.getAttribute('Number') || p.getAttribute('OriginalNumber') ||
+                     p.getAttribute('PairingNumber');
+      const length = p.getAttribute('Length');
+
+      const dates = [...p.querySelectorAll('PairingOnDate')]
+        .map(d => d.getAttribute('Date') || d.getAttribute('EffectiveDate'))
+        .filter(Boolean).sort();
+
+      const legStations = new Set();
+      for (const leg of p.querySelectorAll('PairingLeg')) {
+        const a = leg.getAttribute('ArrLoc'); const d = leg.getAttribute('DeptLoc');
+        if (a) legStations.add(a);
+        if (d) legStations.add(d);
+      }
+      const landings = [...legStations];
+      const layovers = [...p.querySelectorAll('Layover')]
+        .map(l => l.getAttribute('Location')).filter(Boolean);
+
+      const len = parseInt(length) || 1;
+      const start = dates[0] || null;
+      const end = start ? this._addDaysISO(start, len - 1) : null;
+
+      return {
+        number,
+        length,
+        checkin: p.getAttribute('CheckIn') || p.getAttribute('CheckinTime'),
+        checkout: p.getAttribute('CheckOut') || p.getAttribute('CheckoutTime'),
+        credit: p.getAttribute('Credit'),
+        tafb: p.getAttribute('Tafb'),
+        redeye: (p.getAttribute('IsRedEye') || '').toLowerCase() === 'true',
+        landings,
+        layovers,
+        stations: [...new Set([...landings, ...layovers])],
+        dates,
+        start,
+        end,
+        detail: p.getAttribute('DetailReport') || ''
+      };
+    });
+  }
+
+  _addDaysISO(iso, n) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+    const t = Date.parse(iso + 'T00:00:00Z');
+    if (Number.isNaN(t)) return null;
+    return new Date(t + n * 86400000).toISOString().slice(0, 10);
   }
 }

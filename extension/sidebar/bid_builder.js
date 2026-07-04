@@ -46,8 +46,7 @@ export function buildBidXml(model) {
     </BidLine>`;
   };
 
-  // StartBidGroup / PreferOff / LineCondition / Waive / Instruction:
-  // BidLineNumber first, then BidLineType, Editable, optional ShowAnalyzeDetails, then content
+  // StartBidGroup: BidLineNumber → BidLineType → Editable → ShowAnalyzeDetails → content
   const lineNumberFirst = (type, innerXml, extra = '') => {
     const num = lineNum++;
     return `    <BidLine>
@@ -55,6 +54,18 @@ export function buildBidXml(model) {
       <BidLineType>${type}</BidLineType>
       <Editable></Editable>
       ${extra ? extra + '\n      ' : ''}${innerXml.trim()}
+    </BidLine>`;
+  };
+
+  // PreferOff / LineCondition / AvoidPairings (non-SysGen, non-StartBidGroup):
+  // NavBlue native sends BidLineType → content → BidLineNumber → Editable
+  const lineTypeFirst = (type, innerXml) => {
+    const num = lineNum++;
+    return `    <BidLine>
+      <BidLineType>${type}</BidLineType>
+      ${innerXml.trim()}
+      <BidLineNumber>${num}</BidLineNumber>
+      <Editable></Editable>
     </BidLine>`;
   };
 
@@ -85,7 +96,7 @@ export function buildBidXml(model) {
 
     // 2. Waive lines — must be at top of group per PBS manual
     for (const waiveType of (group.waives || [])) {
-      lines.push(lineNumberFirst('Waive',
+      lines.push(lineTypeFirst('Waive',
         `<Waive>
           <WaiveType>${waiveType}</WaiveType>
           <${waiveType}></${waiveType}>
@@ -96,13 +107,13 @@ export function buildBidXml(model) {
     // 3. Set conditions (LineConditions) — min/max credit, days-on, time-between, etc.
     for (const cond of (model.constants?.line_conditions || [])) {
       const xml = buildLineCondition(cond);
-      if (xml) lines.push(lineNumberFirst('LineCondition', xml));
+      if (xml) lines.push(lineTypeFirst('LineCondition', xml));
     }
 
     // 4. PreferOff (constants apply to every group)
     for (const pref of (model.constants?.prefer_off || [])) {
       const xml = buildPreferOff(pref);
-      if (xml) lines.push(lineNumberFirst('PreferOff', xml));
+      if (xml) lines.push(lineTypeFirst('PreferOff', xml));
     }
 
     // 5. AvoidPairings — employees first, then property-based
@@ -129,7 +140,7 @@ export function buildBidXml(model) {
 
     // 7. CSSN instruction — ClearScheduleAndStartNext; placed before catch-all per PBS manual
     if (group.cssn) {
-      lines.push(lineNumberFirst('Instruction',
+      lines.push(lineTypeFirst('Instruction',
         `<Instruction>
           <InstructionType>ClearScheduleAndStartNext</InstructionType>
           <ClearScheduleAndStartNext></ClearScheduleAndStartNext>
@@ -162,7 +173,7 @@ export function buildBidXml(model) {
 
   for (const pref of (model.reserve?.prefer_off || [])) {
     const xml = buildPreferOff(pref);
-    if (xml) lines.push(lineNumberFirst('PreferOff', xml));
+    if (xml) lines.push(lineTypeFirst('PreferOff', xml));
   }
 
   // SysGen fallback groups — NavBlue requires these at the end of every bid
@@ -264,30 +275,38 @@ function buildPreferOff(pref) {
 
 function buildLineCondition(cond) {
   switch (cond.type) {
+    // NavBlue serializes "Minimum Base Layover Nh" as a TimeBetweenPairings line condition
+    // (min rest at base between trips). Accept hours+optional minutes.
     case 'TimeBetweenPairings': {
       const h = String(Math.floor(cond.hours)).padStart(3, '0');
+      const m = String(cond.minutes || 0).padStart(2, '0');
       return `<LineCondition>
       <LineConditionType>TimeBetweenPairings</LineConditionType>
       <TimeBetweenPairings>
-        <Time><Hour>${h}</Hour><Minute>00</Minute></Time>
+        <Time><Hour>${h}</Hour><Minute>${m}</Minute></Time>
       </TimeBetweenPairings>
     </LineCondition>`;
     }
+    // "Minimum Credit (Window)" — a simple, valueless line condition (a checkmark that tells
+    // NavBlue to enforce the pilot's minimum credit). LineConditionType with an empty body.
+    case 'MinimumCredit':
+      return `<LineCondition>
+      <LineConditionType>MinimumCredit</LineConditionType>
+      <MinimumCredit></MinimumCredit>
+    </LineCondition>`;
+    // NumberDays-valued conditions. If no day count was supplied, fall through to the generic
+    // simple emitter (some of these are valueless checkboxes in certain contracts).
     case 'MaximumDaysOn':
-      return `<LineCondition>
-      <LineConditionType>MaximumDaysOn</LineConditionType>
-      <MaximumDaysOn><Days>${cond.days}</Days></MaximumDaysOn>
-    </LineCondition>`;
+    case 'MinimumDaysOff':
     case 'MinimumConsecutiveDaysOff':
-      return `<LineCondition>
-      <LineConditionType>MinimumConsecutiveDaysOff</LineConditionType>
-      <MinimumConsecutiveDaysOff><Days>${cond.days}</Days></MinimumConsecutiveDaysOff>
-    </LineCondition>`;
     case 'TotalDaysOffInPeriod':
-      return `<LineCondition>
-      <LineConditionType>TotalDaysOffInPeriod</LineConditionType>
-      <TotalDaysOffInPeriod><Days>${cond.days}</Days></TotalDaysOffInPeriod>
+      if (cond.days != null) {
+        return `<LineCondition>
+      <LineConditionType>${cond.type}</LineConditionType>
+      <${cond.type}><Days>${cond.days}</Days></${cond.type}>
     </LineCondition>`;
+      }
+      break;
     case 'MinimumCreditWindow': {
       const h = String(Math.floor(cond.hours)).padStart(3, '0');
       const m = String(cond.minutes || 0).padStart(2, '0');
@@ -318,9 +337,18 @@ function buildLineCondition(cond) {
       <Pattern>${parts.join('')}</Pattern>
     </LineCondition>`;
     }
-    default:
-      return '';
   }
+  // Generic SIMPLE line condition — a valueless "set condition" checkbox. NavBlue serializes
+  // these as <LineConditionType>KEY</LineConditionType><KEY></KEY> (verified: MinimumCredit).
+  // Covers every simple key in the catalog (OverSked, OneDayOffInSeven, FortyEightHoursOffInSevenDays,
+  // MinimumConsecutiveDaysOff without a count, …). Only emit for a plausible key.
+  if (cond.type && /^[A-Za-z][A-Za-z0-9]*$/.test(cond.type)) {
+    return `<LineCondition>
+      <LineConditionType>${cond.type}</LineConditionType>
+      <${cond.type}></${cond.type}>
+    </LineCondition>`;
+  }
+  return '';
 }
 
 // PairingPropertyType is always LAST inside PairingProperty

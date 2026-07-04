@@ -1,0 +1,1151 @@
+{
+  "AwardStatDay": {
+    "xml_type": "AwardStatDayDate",
+    "value_type": "AwardStatDayDate",
+    "mappedPairingKey": "",
+    "inner": []
+  },
+  "AwardReserveDay": {
+    "xml_type": "AwardReserveDayType",
+    "value_type": "ListOfDatesAndTime",
+    "mappedPairingKey": "arrPairingOnDates.arrDutyOn.arrDutyOnDateTimes",
+    "inner": [
+      "ElseStartNext",
+      "AllOrNothing"
+    ]
+  },
+  "OneDayOffInSeven": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "BaseRest": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TrainingCredit": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "FourConsecutiveDaysOffTDY": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "NonIsolatedDaysOff": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwoWoclsOff": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "RequiredTenHourRest": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "RestAfterTraining": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "RestBeforeTrainingToTenHours": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "RestAfterTrainingToTenHours": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "RestBeforeTV": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "RestBetweenDifferentTheaters": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwelveHourRequiredRest": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwoConsecutiveDaysOffInSeven": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwoDaysOffAfterSixTo": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwoDaysOffAfterSixToXY": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwoDaysOffBeforeCQ": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "WaiveVacationGDO": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "AllVacationInviolateDaysOff": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MaxDaysOnTo6": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MinimumConsecutiveDaysOff": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MinimumTwoDaysOn": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwentyFourHoursOffInSevenDays": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MinimumTwoDaysOff": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "ConsecutiveSplitDuties": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "BlockOfFourDaysOff": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "RaiseMaxInterislandBlock": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "CoTerminal": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "CoTerminalRest": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "ThirtyHourRestAwayFromBase": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "FortyEightHoursInSevenDaysToThirtySixHours": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "DaysOffAfterTraining": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "FortyEightHoursOffInSevenDays": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "FortyEightHoursOffInSevenDaysIfTraining": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "FourDaysOffInFourteen": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "Max30In7": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MaxBlockInCalendarDays": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MaxDutyDaysPerBidPeriod": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MaxDaysOnFive": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MaxDaysOnFiveIfTraining": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "BlockOfThreeDaysOff": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "CalendarDayFreeFromDuty": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "AllowCharters": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "AllowNighttimeTraining": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "AllowNonRedeyeLongDutyPeriodPairings": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "AllowRedeyeLongDutyPeriodPairings": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "AllowDaysOffAwayFromBase": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "AllowTwentySixHoursOffAtRON": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MaxDaysOnToX": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MinDaysOffToX": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MinTwoDaysOffAfterFiveDutyPeriods": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MinTwoDaysOffAfterSixDutyPeriods": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MinimumRequiredDaysOffBy": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MaxFiveDutyPeriodsToX": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MaxSixDutyPeriodsToX": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "BlockOfThreeDaysOffToX": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwoDaysOffAfterPairingLine": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwoDaysOffAfterReserveLine": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwoDaysOffAfterTrainingToX": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwoDaysOffBeforeTrainingToX": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "TwoDaysOffBeforeCQToX": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "NoSameDayDutyStarts": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "Forget": {
+    "xml_type": "",
+    "value_type": "Number",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "RedoFrom": {
+    "xml_type": "",
+    "value_type": "Number",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "CSSN": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "Weekends": {
+    "xml_type": "PreferOffType",
+    "value_type": "WeekEnds",
+    "mappedPairingKey": "arrEquipmentNames",
+    "inner": [
+      "ElseStartNext",
+      "AllOrNothing",
+      "WithUDO"
+    ]
+  },
+  "DOWList": {
+    "xml_type": "PreferOffType",
+    "value_type": "DOWListAndTime",
+    "mappedPairingKey": "arrPairingOnDates.arrDutyOn.arrDutyOnDateTimes",
+    "inner": [
+      "ElseStartNext",
+      "AllOrNothing",
+      "TimeToDates",
+      "WithUDO"
+    ]
+  },
+  "DOWRange": {
+    "xml_type": "PreferOffType",
+    "value_type": "DOWRangeAndTime",
+    "mappedPairingKey": "arrPairingOnDates.arrDutyOn.arrDutyOnDateTimes",
+    "inner": [
+      "WithUDO",
+      "ElseStartNext",
+      "AllOrNothing",
+      "WithUDO"
+    ]
+  },
+  "RangeOfDates": {
+    "xml_type": "PreferOffType",
+    "value_type": "ListOfDateRangeAndTime",
+    "mappedPairingKey": "arrPairingOnDates.arrDutyOn.arrDutyOnDateTimes",
+    "inner": [
+      "WithUDO",
+      "ElseStartNext",
+      "AllOrNothing",
+      "WithUDO"
+    ]
+  },
+  "ListOfDates": {
+    "xml_type": "PreferOffType",
+    "value_type": "ListOfDatesAndTime",
+    "mappedPairingKey": "arrPairingOnDates.arrDutyOn.arrDutyOnDateTimes",
+    "inner": [
+      "ElseStartNext",
+      "AllOrNothing",
+      "TimeToDates",
+      "WithUDO"
+    ]
+  },
+  "NoSameDayPairings": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "VacationGDO": {
+    "xml_type": "LineConditionType",
+    "value_type": "DaysCondition",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "VacationInviolateDaysOff": {
+    "xml_type": "LineConditionType",
+    "value_type": "DaysCondition",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "VacationOptIn": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "arrVacationOptInCredit",
+    "inner": [
+      "VacationReducedCredit",
+      "VacationVirtualCredit"
+    ]
+  },
+  "TotalDaysOffInPeriod": {
+    "xml_type": "LineConditionType",
+    "value_type": "NumberDays",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "WaiveTrainingCredit": {
+    "xml_type": "LineConditionType",
+    "value_type": "Credit",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "WaiveVirtualCredit": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "ReserveGeneralDayOnType": {
+    "xml_type": null,
+    "value_type": "ReserveGeneralDay",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "ReserveSetConditionLongCallType": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "ReserveSetConditionShortCallType": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "SlideVacation": {
+    "xml_type": "LineConditionType",
+    "value_type": "NON",
+    "mappedPairingKey": null,
+    "inner": [
+      "NumberDays",
+      "ElseStartNext"
+    ]
+  },
+  "MaximumUDO": {
+    "xml_type": null,
+    "value_type": "NumberDays",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MaximumUDOReserveBidGroup": {
+    "xml_type": null,
+    "value_type": "NumberDays",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "GDOCondition": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "DaysOffWithEmployee": {
+    "xml_type": "LineConditionType",
+    "value_type": "DaysOff",
+    "mappedPairingKey": null,
+    "inner": [
+      "MinimumDaysOff",
+      "ElseStartNext"
+    ]
+  },
+  "DaysOffOppositeEmployee": {
+    "xml_type": "LineConditionType",
+    "value_type": "DaysOff",
+    "mappedPairingKey": null,
+    "inner": [
+      "MinimumDaysOff",
+      "ElseStartNext"
+    ]
+  },
+  "TimeOffConsecutive": {
+    "xml_type": "LineConditionType",
+    "value_type": "DaysCondition",
+    "mappedPairingKey": null,
+    "inner": [
+      "DateRange",
+      "ElseStartNext"
+    ]
+  },
+  "MaxAbove": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "MaximumGDO": {
+    "xml_type": "",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "MinimumGDO": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "TimeBetweenPairings": {
+    "xml_type": "LineConditionType",
+    "value_type": "TimeType",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "MaximumDaysOn": {
+    "xml_type": "LineConditionType",
+    "value_type": "NumberDays",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "MinimumDaysOff": {
+    "xml_type": "LineConditionType",
+    "value_type": "NumberDays",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "Pattern": {
+    "xml_type": "LineConditionType",
+    "value_type": "NumberPattern",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "MaximumCredit": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "OverSked": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "MidCredit": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "MinimumCredit": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "MinimumThreshold": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "VacationAny": {
+    "xml_type": "LineConditionType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": [
+      "ElseStartNext"
+    ]
+  },
+  "VacationRemainderDays": {
+    "xml_type": "LineConditionType",
+    "value_type": "Dates",
+    "mappedPairingKey": "arrPairingOnDates.arrDutyOn.arrDutyOnDateTimes",
+    "inner": [
+      "ElseStartNext",
+      "AllOrNothing"
+    ]
+  },
+  "TrainingGDO": {
+    "xml_type": "LineConditionType",
+    "value_type": "ListOfDatesAndTime",
+    "mappedPairingKey": "arrPairingOnDates.arrDutyOn.arrDutyOnDateTimes",
+    "inner": []
+  },
+  "Employee": {
+    "xml_type": "",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "Position": {
+    "xml_type": "",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "arrPositionNames",
+    "inner": []
+  },
+  "Language": {
+    "xml_type": "",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "AllowInterveningActivities": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "strIsAllowInterveningActivities",
+    "inner": []
+  },
+  "MaxTimeBetweenPairings": {
+    "xml_type": "TimeOnlyType",
+    "value_type": "TimeOnlyType",
+    "mappedPairingKey": "maxTimeBetweenPairings",
+    "inner": []
+  },
+  "ElseStartNext": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "strIsElseStartNext",
+    "inner": []
+  },
+  "VacationReducedCredit": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "strIsVacationReducedCredit",
+    "inner": []
+  },
+  "VacationVirtualCredit": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "strIsVacationVirtualCredit",
+    "inner": []
+  },
+  "Limit": {
+    "xml_type": "",
+    "value_type": "LimitType",
+    "mappedPairingKey": "strLengthValue",
+    "inner": []
+  },
+  "AircraftType": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "allAirCraftEquipNames",
+    "inner": []
+  },
+  "AllowanceAmount": {
+    "xml_type": "AllowanceAmountType",
+    "value_type": "AllowanceAmountType",
+    "mappedPairingKey": "strAllowance",
+    "inner": []
+  },
+  "AverageDailyBlockTime": {
+    "xml_type": "TimeIntervalType",
+    "value_type": "TimeIntervalType",
+    "mappedPairingKey": "averageDailyBlockTime",
+    "inner": []
+  },
+  "AverageDailyCredit": {
+    "xml_type": "CreditIntervalType",
+    "value_type": "CreditIntervalType",
+    "mappedPairingKey": "averageDailyCredit",
+    "inner": []
+  },
+  "TotalPay": {
+    "xml_type": "CreditIntervalType",
+    "value_type": "CreditIntervalType",
+    "mappedPairingKey": "objPairingOnDate.strTotalPay",
+    "inner": []
+  },
+  "TotalCreditVsTotalPay": {
+    "xml_type": "PercentType",
+    "value_type": "PercentType",
+    "mappedPairingKey": "objPairingOnDate.strTotalCreditVsTotalPay",
+    "inner": []
+  },
+  "TotalPayVsTotalCredit": {
+    "xml_type": "PercentType",
+    "value_type": "PercentType",
+    "mappedPairingKey": "objPairingOnDate.strTotalPayVsTotalCredit",
+    "inner": []
+  },
+  "CarryOut": {
+    "xml_type": "NumberDaysType",
+    "value_type": "NumberDaysType",
+    "mappedPairingKey": "objcarryOutDays",
+    "inner": []
+  },
+  "Charters": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "arrPairingLegsIsCharter",
+    "inner": []
+  },
+  "IfSOR": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "IfTOA": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "InChargeOnly": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "",
+    "inner": []
+  },
+  "CreditPerTAFB": {
+    "xml_type": "CreditIntervalType",
+    "value_type": "CreditIntervalType",
+    "mappedPairingKey": "strCreditPerTafb",
+    "inner": []
+  },
+  "BlockTimePerTAFBAsPercent": {
+    "xml_type": "PercentType",
+    "value_type": "PercentType",
+    "mappedPairingKey": "strBlockTimePerTafbAsPercent",
+    "inner": []
+  },
+  "CreditPerTAFBAsPercent": {
+    "xml_type": "PercentType",
+    "value_type": "PercentType",
+    "mappedPairingKey": "strCreditPerTafbAsPercent",
+    "inner": []
+  },
+  "DeadheadDay": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "strDeadheadDay",
+    "inner": []
+  },
+  "DeadheadLegs": {
+    "xml_type": "NumberLegsType",
+    "value_type": "NumberLegsType",
+    "mappedPairingKey": "intDeadHeadLegs",
+    "inner": []
+  },
+  "DutyDuration": {
+    "xml_type": "TimeIntervalType",
+    "value_type": "TimeIntervalType",
+    "mappedPairingKey": "dutyduration",
+    "inner": []
+  },
+  "DutyLegs": {
+    "xml_type": "NumberLegsType",
+    "value_type": "NumberLegsType",
+    "mappedPairingKey": "arrPairingLegsDutyLength",
+    "inner": []
+  },
+  "NumDuties": {
+    "xml_type": "NumberLegsType",
+    "value_type": "NumberLegsType",
+    "mappedPairingKey": "intDutiesNumber",
+    "inner": []
+  },
+  "Junior": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "",
+    "inner": []
+  },
+  "LandingsIn": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "arrLandingsIn",
+    "inner": []
+  },
+  "EnrouteCheckin": {
+    "xml_type": "TimeType",
+    "value_type": "TimeType",
+    "mappedPairingKey": "enrouteDutiesCheckInTime",
+    "inner": []
+  },
+  "EnrouteCheckout": {
+    "xml_type": "TimeType",
+    "value_type": "TimeType",
+    "mappedPairingKey": "enrouteDutiesCheckOutTime",
+    "inner": []
+  },
+  "LineCheckAirmen": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "",
+    "inner": []
+  },
+  "PairingBlockTime": {
+    "xml_type": "TimeIntervalType",
+    "value_type": "TimeIntervalType",
+    "mappedPairingKey": "strBlockTime",
+    "inner": []
+  },
+  "InPeriodBlockTime": {
+    "xml_type": "TimeIntervalType",
+    "value_type": "TimeIntervalType",
+    "mappedPairingKey": "arrInPeriodBlockTime",
+    "inner": []
+  },
+  "CarryOutBlockTime": {
+    "xml_type": "TimeIntervalType",
+    "value_type": "TimeIntervalType",
+    "mappedPairingKey": "arrCarryOutBlockTime",
+    "inner": []
+  },
+  "PairingCredit": {
+    "xml_type": "CreditIntervalType",
+    "value_type": "CreditIntervalType",
+    "mappedPairingKey": "strCredit",
+    "inner": []
+  },
+  "InPeriodCredit": {
+    "xml_type": "CreditIntervalType",
+    "value_type": "CreditIntervalType",
+    "mappedPairingKey": "arrInPeriodCredit",
+    "inner": []
+  },
+  "CheckInBase": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "strBase",
+    "inner": []
+  },
+  "PairingInternationalType": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "strIntl",
+    "inner": []
+  },
+  "CarryOutCredit": {
+    "xml_type": "CreditIntervalType",
+    "value_type": "CreditIntervalType",
+    "mappedPairingKey": "arrcarryOutCredit",
+    "inner": []
+  },
+  "PairingLength": {
+    "xml_type": "NumberDaysType",
+    "value_type": "NumberDaysType",
+    "mappedPairingKey": "strLengthValue",
+    "inner": []
+  },
+  "StartOnDateRange": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "StartOnDates": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "StartOnDOWs": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "StartOnTimeRange": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "PairingNumberStartOnDates": {
+    "xml_type": "",
+    "value_type": "StartOnDates",
+    "mappedPairingKey": "arrPairingWithStartDate",
+    "inner": []
+  },
+  "PairingNumberCheckInDates": {
+    "xml_type": "",
+    "value_type": "StartOnDates",
+    "mappedPairingKey": "arrPairingWithStartDate",
+    "inner": []
+  },
+  "PairingStartStation": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "arrNotDeadHeadDep",
+    "inner": []
+  },
+  "PairingEndStation": {
+    "xml_type": null,
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "arrNotDeadHeadArr",
+    "inner": []
+  },
+  "Redeyes": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "arrPairingLegsIsRedEyeExcDeadhead",
+    "inner": []
+  },
+  "Senior": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "",
+    "inner": []
+  },
+  "SitLength": {
+    "xml_type": "TimeIntervalType",
+    "value_type": "TimeIntervalType",
+    "mappedPairingKey": "arrRestTime",
+    "inner": []
+  },
+  "StandUp": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "isStandUp",
+    "inner": []
+  },
+  "TAFB": {
+    "xml_type": "TimeIntervalType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "strTafb",
+    "inner": []
+  },
+  "TotalLegsInPairing": {
+    "xml_type": "NumberLegsType",
+    "value_type": "NumberLegsType",
+    "mappedPairingKey": "intLegsInPairingExcDeadhead",
+    "inner": []
+  },
+  "TotalLegsInFirstDuty": {
+    "xml_type": "NumberLegsType",
+    "value_type": "NumberLegsType",
+    "mappedPairingKey": "intLegsInFirstDutyExcDeadhead",
+    "inner": []
+  },
+  "TotalLegsInLastDuty": {
+    "xml_type": "NumberLegsType",
+    "value_type": "NumberLegsType",
+    "mappedPairingKey": "intLegsInLastDutyExcDeadhead",
+    "inner": []
+  },
+  "BlockTime": {
+    "xml_type": "TimeIntervalType",
+    "value_type": "TimeIntervalType",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "Credit": {
+    "xml_type": "CreditIntervalType",
+    "value_type": "CreditIntervalType",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "LayoverTime": {
+    "xml_type": "TimeIntervalType",
+    "value_type": "TimeIntervalType",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "NumberOfLayovers": {
+    "xml_type": "NumberLayoversType",
+    "value_type": "NumberLayoversType",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "LayoverStations": {
+    "xml_type": null,
+    "value_type": "LayoverStationsType",
+    "mappedPairingKey": "arrPairingOnDates.arrLayover.strLocation",
+    "inner": []
+  },
+  "ElseStartNextBidGroup": {
+    "xml_type": "boolean",
+    "value_type": "ElseStartNext",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "SCByFRMS": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "SCByIdentifier": {
+    "xml_type": "SCByIdentifierType",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "arrShortCallIdentifier",
+    "inner": []
+  },
+  "SCByLimit": {
+    "xml_type": "NumberDaysType",
+    "value_type": "NumberDaysType",
+    "mappedPairingKey": "strSCLimit",
+    "inner": []
+  },
+  "TrainingType": {
+    "xml_type": "",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "strTrainingType",
+    "inner": []
+  },
+  "TrainingIdentifier": {
+    "xml_type": "",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "arrIdentifier",
+    "inner": []
+  },
+  "TrainingEventLocation": {
+    "xml_type": "",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": "arrLocations",
+    "inner": []
+  },
+  "WOCLTurn": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  },
+  "PremiumRotation": {
+    "xml_type": "boolean",
+    "value_type": "(simple/none)",
+    "mappedPairingKey": null,
+    "inner": []
+  }
+}

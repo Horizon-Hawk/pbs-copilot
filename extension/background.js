@@ -73,12 +73,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Claude API call — proxied through Vercel backend (API key stays server-side)
   if (message.type === 'CLAUDE_REQUEST') {
-    chrome.storage.local.get('licenseKey', async ({ licenseKey }) => {
+    (async () => {
       try {
         const res = await fetch('https://pbs-copilot-backend.vercel.app/api/claude', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ license_key: licenseKey || '', ...message.payload })
+          body: JSON.stringify({ ...message.payload })
         });
         const data = await res.json();
         if (!res.ok) {
@@ -89,7 +89,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (err) {
         sendResponse({ error: err.message });
       }
-    });
+    })();
     return true;
   }
 

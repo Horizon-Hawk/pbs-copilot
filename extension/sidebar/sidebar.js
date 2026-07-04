@@ -35,21 +35,13 @@ async function init() {
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 async function loadStorage() {
-  const data = await chrome.storage.local.get(['constants', 'groups', 'licenseKey', 'endpoint']);
+  const data = await chrome.storage.local.get(['constants', 'groups']);
   constants = data.constants || {
     min_credit: 75,
     max_credit: 90,
     pre_award_credit: 0
   };
   groups = data.groups || [];
-
-  if (data.licenseKey) document.getElementById('setting-license-key').value = data.licenseKey;
-  if (data.endpoint) document.getElementById('setting-endpoint').value = data.endpoint;
-}
-
-async function saveSettings() {
-  const licenseKey = document.getElementById('setting-license-key').value.trim();
-  await chrome.storage.local.set({ licenseKey });
 }
 
 async function saveConstants() {
@@ -603,27 +595,9 @@ async function submitBid() {
     return;
   }
 
-  const { licenseKey } = await chrome.storage.local.get('licenseKey');
-
-  if (!licenseKey) {
-    showStatus('submit-status', 'error', 'No license key — add it in Settings ⚙');
-    return;
-  }
-
   document.getElementById('btn-submit').disabled = true;
 
   try {
-    showStatus('submit-status', 'loading', 'Validating license...');
-    const vRes = await fetch('https://pbs-copilot-backend.vercel.app/api/validate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ license_key: licenseKey })
-    });
-    const vData = await vRes.json();
-    if (!vRes.ok || !vData.valid) {
-      throw new Error(vData.error || 'Invalid license key — check Settings ⚙');
-    }
-
     const targetEl = document.querySelector('input[name="bid-target"]:checked');
     const target = targetEl?.value || 'current';
     showStatus('submit-status', 'loading', `Submitting ${target} bid to NavBlue...`);
@@ -650,16 +624,6 @@ function bindToggle(headerEl, bodyEl) {
 
 // ── Event bindings ────────────────────────────────────────────────────────────
 function bindEvents() {
-  // Settings panel
-  document.getElementById('btn-settings').addEventListener('click', () =>
-    document.getElementById('panel-settings').classList.remove('hidden'));
-  document.getElementById('btn-close-settings').addEventListener('click', () =>
-    document.getElementById('panel-settings').classList.add('hidden'));
-  document.getElementById('btn-save-settings').addEventListener('click', async () => {
-    await saveSettings();
-    document.getElementById('panel-settings').classList.add('hidden');
-  });
-
   // Constants panel
   document.getElementById('btn-edit-constants').addEventListener('click', () => {
     document.getElementById('const-pre-award-credit').value = constants.pre_award_credit ?? 0;

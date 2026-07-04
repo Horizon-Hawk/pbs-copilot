@@ -40,19 +40,6 @@ body {
   color: #64748b;
 }
 
-#btn-settings {
-  background: none;
-  border: none;
-  color: #64748b;
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  padding: 2px 4px;
-  border-radius: 4px;
-  transition: color 0.15s;
-}
-#btn-settings:hover { color: #94a3b8; }
-
 /* ── State panels ────────────────────────────────────────────────────────── */
 .state-panel { padding: 16px 12px; }
 #state-disconnected p { color: #64748b; text-align: center; margin-top: 24px; line-height: 1.6; }
@@ -295,6 +282,15 @@ label:first-child { margin-top: 0; }
 .pairing-avoid .pairing-num   { color: #f87171; }
 
 /* ── Bid preview ─────────────────────────────────────────────────────────── */
+.preview-global {
+  font-size: 11px;
+  color: #94a3b8;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+}
 .preview-group {
   background: #1e293b;
   border: 1px solid #334155;

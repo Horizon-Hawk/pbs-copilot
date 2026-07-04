@@ -1,38 +1,10 @@
-// POST /api/build — validate license key then proxy Claude API call
-
-const LS_VARIANT_ID = 1765538;
+// POST /api/build — proxy Claude API call
 
 module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { license_key, ...claudePayload } = req.body || {};
-
-  if (!license_key) return res.status(401).json({ error: 'license_key required' });
-
-  // Validate license key against Lemon Squeezy
-  try {
-    const lsRes = await fetch('https://api.lemonsqueezy.com/v1/licenses/validate', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Bearer ${process.env.LS_API_KEY}`
-      },
-      body: new URLSearchParams({
-        license_key: license_key.trim(),
-        instance_name: 'PBS Copilot'
-      })
-    });
-
-    const lsData = await lsRes.json();
-
-    if (!lsData.valid || lsData.meta?.variant_id !== LS_VARIANT_ID || lsData.license_key?.status !== 'active') {
-      return res.status(401).json({ error: 'Invalid or expired license — check Settings ⚙' });
-    }
-  } catch (e) {
-    return res.status(500).json({ error: 'License validation unavailable' });
-  }
+  const claudePayload = req.body || {};
 
   // Call Claude server-side
   try {
